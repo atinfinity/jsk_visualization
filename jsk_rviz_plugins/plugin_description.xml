@@ -128,8 +128,9 @@
       Displays for sensor_msgs::PointCloud2 message
     </description>
   </class>
-  <!-- people_msgs is not released for ROS 2 Jazzy binaries; this display is
-       compiled only when people_msgs is found (see CMakeLists.txt).
+  <!-- people_msgs has no ROS 2 Jazzy binary release; a stopgap source
+       package in this repository provides it. The display is compiled only
+       when people_msgs is found (see CMakeLists.txt). -->
   <class name="jsk_rviz_plugin/PeoplePositionMeasurementArray"
          type="jsk_rviz_plugins::PeoplePositionMeasurementArrayDisplay"
          base_class_type="rviz_common::Display">
@@ -137,7 +138,6 @@
       visualize people_msgs/PositionMeasurementArray
     </description>
   </class>
-  -->
 
   <!-- Group D: tools and panels -->
   <class name="jsk_rviz_plugin/CloseAll"

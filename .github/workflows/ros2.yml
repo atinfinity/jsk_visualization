@@ -1,0 +1,45 @@
+name: ros2
+
+on:
+  push:
+    branches: [ros2]
+  pull_request:
+    branches: [ros2]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    container: ros:jazzy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/jsk_visualization
+
+      - name: Import source dependencies
+        # jsk_recognition_msgs (ROS 2) comes from the ros2 branch of the
+        # jsk_recognition fork listed in ros2.repos.
+        run: |
+          apt-get update
+          apt-get install -y python3-vcstool
+          vcs import src < src/jsk_visualization/ros2.repos
+
+      - name: Install dependencies
+        run: |
+          rosdep update
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: Build
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --event-handlers console_cohesion+
+
+      - name: Test
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          QT_QPA_PLATFORM=offscreen colcon test --packages-select jsk_rviz_plugins --event-handlers console_cohesion+
+          colcon test-result --verbose
