@@ -17,6 +17,10 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <!-- boost/circular_buffer.hpp (header-only) in normal_display and
+       ambient_sound_display -->
+  <build_depend>libboost-dev</build_depend>
+
   <depend>rclcpp</depend>
   <depend>rviz_common</depend>
   <depend>rviz_rendering</depend>
