@@ -81,6 +81,17 @@ namespace jsk_recognition_utils
       return Polygon(vertices);
     }
 
+    static Ptr fromROSMsgPtr(const geometry_msgs::msg::Polygon& polygon)
+    {
+      Vertices vertices;
+      for (size_t i = 0; i < polygon.points.size(); i++) {
+        vertices.push_back(Eigen::Vector3f(polygon.points[i].x,
+                                           polygon.points[i].y,
+                                           polygon.points[i].z));
+      }
+      return Ptr(new Polygon(vertices));
+    }
+
     size_t getNumVertices() { return vertices_.size(); }
     Eigen::Vector3f getVertex(size_t i) { return vertices_[i]; }
     Vertices getVertices() { return vertices_; }

@@ -16,6 +16,7 @@ find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(jsk_rviz_plugins_msgs REQUIRED)
+find_package(jsk_visualization_utils REQUIRED)
 find_package(jsk_recognition_msgs REQUIRED)
 find_package(jsk_footstep_msgs REQUIRED)
 find_package(jsk_hark_msgs REQUIRED)
@@ -115,6 +116,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   rviz_default_plugins::rviz_default_plugins
   rviz_ogre_vendor::OgreMain
   rviz_ogre_vendor::OgreOverlay
+  jsk_visualization_utils::jsk_visualization_utils
   rclcpp::rclcpp
   tf2_ros::tf2_ros
   image_transport::image_transport
@@ -208,7 +210,7 @@ endif()
 ament_export_libraries(${PROJECT_NAME})
 ament_export_dependencies(
   rclcpp rviz_common rviz_rendering rviz_default_plugins rviz_ogre_vendor
-  jsk_rviz_plugins_msgs jsk_recognition_msgs jsk_footstep_msgs jsk_hark_msgs
+  jsk_rviz_plugins_msgs jsk_visualization_utils jsk_recognition_msgs jsk_footstep_msgs jsk_hark_msgs
   jsk_gui_msgs view_controller_msgs
   std_msgs std_srvs geometry_msgs sensor_msgs
   diagnostic_msgs action_msgs cv_bridge image_geometry image_transport

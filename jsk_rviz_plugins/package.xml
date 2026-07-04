@@ -28,6 +28,7 @@
   <depend>rviz_ogre_vendor</depend>
   <depend>pluginlib</depend>
   <depend>jsk_rviz_plugins_msgs</depend>
+  <depend>jsk_visualization_utils</depend>
   <depend>jsk_recognition_msgs</depend>
   <depend>jsk_footstep_msgs</depend>
   <depend>jsk_hark_msgs</depend>

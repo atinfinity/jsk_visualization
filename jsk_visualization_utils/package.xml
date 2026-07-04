@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>jsk_visualization_utils</name>
+  <version>3.0.0</version>
+  <description>
+    Header-only utilities shared by the jsk_visualization ROS 2 packages:
+    a PCL-free minimal port of jsk_recognition_utils geo::Plane/Polygon.
+    Remove once jsk_recognition_utils is released for ROS 2.
+  </description>
+  <maintainer email="k-okada@jsk.t.u-tokyo.ac.jp">Kei Okada</maintainer>
+  <license>BSD</license>
+
+  <url type="repository">https://github.com/jsk-ros-pkg/jsk_visualization</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>eigen</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
