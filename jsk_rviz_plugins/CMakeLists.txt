@@ -126,10 +126,29 @@ install(DIRECTORY config icons launch DESTINATION share/${PROJECT_NAME})
 
 ament_python_install_package(${PROJECT_NAME} PACKAGE_DIR python/${PROJECT_NAME})
 
-# Python executables are installed group by group as their rclpy port lands.
-# install(PROGRAMS
-#   scripts/rosconsole_overlay_text.py
-#   DESTINATION lib/${PROJECT_NAME})
+# Ported rclpy executables. Scripts still waiting on message packages that
+# have no ROS 2 Jazzy release stay uninstalled (see git history / Phase 2).
+install(PROGRAMS
+  scripts/capture_rviz_text.py
+  scripts/float32_to_overlay_text.py
+  scripts/link_marker_publisher.py
+  scripts/overlay_menu_bridge.py
+  scripts/pointcloud_information.py
+  scripts/pr2_visualization.py
+  scripts/relay_camera_info.py
+  scripts/relay_screenshot.py
+  scripts/rosconsole_overlay_text.py
+  scripts/static_overlay_text.py
+  scripts/string_to_overlay_text.py
+  scripts/tf_diff_text.py
+  scripts/twist_stamped_add_header.py
+  samples/diagnostics_sample.py
+  samples/overlay_menu_sample.py
+  samples/overlay_sample.py
+  samples/pictogram.py
+  samples/pictogram_all.py
+  samples/piechart_sample.py
+  DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

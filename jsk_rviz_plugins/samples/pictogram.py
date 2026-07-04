@@ -1,12 +1,14 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import rospy
-from jsk_rviz_plugins.msg import Pictogram
+import time
+
+import rclpy
+from jsk_rviz_plugins_msgs.msg import Pictogram
 from random import random
-rospy.init_node("pictogram_sample")
-p = rospy.Publisher("/pictogram", Pictogram)
 
-r = rospy.Rate(0.1)
+rclpy.init()
+node = rclpy.create_node("pictogram_sample")
+p = node.create_publisher(Pictogram, "/pictogram", 1)
 
 pictograms = ["phone",
               "mobile",
@@ -1697,27 +1699,28 @@ pictograms = ["phone",
 "fa-unity"]
 
 counter = 0
-while not rospy.is_shutdown():
+while rclpy.ok():
     msg = Pictogram()
-    msg.action = Pictogram.JUMP_ONCE
-    msg.header.frame_id = "/base_link"
-    msg.header.stamp = rospy.Time.now()
+    msg.action = Pictogram.ACTION_JUMP_ONCE
+    msg.header.frame_id = "base_link"
+    msg.header.stamp = node.get_clock().now().to_msg()
     msg.pose.position.z = 1.6
     msg.pose.orientation.w = 0.7
-    msg.pose.orientation.x = 0
+    msg.pose.orientation.x = 0.0
     msg.pose.orientation.y = -0.7
-    msg.pose.orientation.z = 0
-    msg.mode = Pictogram.PICTOGRAM_MODE
+    msg.pose.orientation.z = 0.0
+    msg.mode = Pictogram.MODE_PICTOGRAM
     msg.speed = 1.0
     # msg.ttl = 5.0
-    msg.size = 1
+    msg.size = 1.0
     msg.color.r = 25 / 255.0
     msg.color.g = 255 / 255.0
     msg.color.b = 240 / 255.0
     msg.color.a = 1.0
     msg.character = pictograms[counter]
     p.publish(msg)
-    r.sleep()
+    counter = (counter + 1) % len(pictograms)
+    time.sleep(10.0)
     counter = counter + 1
     if len(pictograms) == counter:
         counter = 0

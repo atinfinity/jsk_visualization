@@ -1,19 +1,22 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #
-# Please run rviz by rosrun rviz rviz -d `rospack find jsk_rviz_plugins`/config/pictogram.rviz
+# Please run rviz2 by ros2 launch jsk_rviz_plugins pictogram_sample.launch.py
 #
 
-import rospy
 import math
-from jsk_rviz_plugins.msg import Pictogram, PictogramArray
-from random import random, choice
-rospy.init_node("pictogram_all_sample")
-p = rospy.Publisher("/pictogram_array", PictogramArray)
+import time
 
-r = rospy.Rate(1)
-actions = [Pictogram.JUMP, Pictogram.JUMP_ONCE, Pictogram.ADD, 
-           Pictogram.ROTATE_X, Pictogram.ROTATE_Y, Pictogram.ROTATE_Z]
+import rclpy
+from jsk_rviz_plugins_msgs.msg import Pictogram, PictogramArray
+from random import random, choice
+
+rclpy.init()
+node = rclpy.create_node("pictogram_all_sample")
+p = node.create_publisher(PictogramArray, "/pictogram_array", 1)
+
+actions = [Pictogram.ACTION_JUMP, Pictogram.ACTION_JUMP_ONCE, Pictogram.ACTION_ADD,
+           Pictogram.ACTION_ROTATE_X, Pictogram.ACTION_ROTATE_Y, Pictogram.ACTION_ROTATE_Z]
 pictograms = ["phone",
               "mobile",
               "mouse",
@@ -1703,25 +1706,25 @@ pictograms = ["phone",
 "fa-unity"]
 
 counter = 0
-while not rospy.is_shutdown():
+while rclpy.ok():
     initial_x = -int(math.sqrt(len(pictograms)))/2
     arr = PictogramArray()
-    arr.header.frame_id = "/base_link"
-    arr.header.stamp = rospy.Time.now()
+    arr.header.frame_id = "base_link"
+    arr.header.stamp = node.get_clock().now().to_msg()
     prev_xyz = [initial_x, -10, 0]
     for character in pictograms:
         msg = Pictogram()
-        msg.header.frame_id = "/base_link"
+        msg.header.frame_id = "base_link"
         msg.action = choice(actions)
-        msg.header.stamp = rospy.Time.now()
-        msg.pose.position.x = prev_xyz[0] + 1
-        msg.pose.position.y = prev_xyz[1]
-        msg.pose.position.z = 0
+        msg.header.stamp = node.get_clock().now().to_msg()
+        msg.pose.position.x = float(prev_xyz[0] + 1)
+        msg.pose.position.y = float(prev_xyz[1])
+        msg.pose.position.z = 0.0
         msg.pose.orientation.w = 0.7
-        msg.pose.orientation.x = 0
+        msg.pose.orientation.x = 0.0
         msg.pose.orientation.y = -0.7
-        msg.pose.orientation.z = 0
-        msg.size = 1
+        msg.pose.orientation.z = 0.0
+        msg.size = 1.0
         msg.color.r = 25 / 255.0
         msg.color.g = 255 / 255.0
         msg.color.b = 240 / 255.0
@@ -1733,7 +1736,7 @@ while not rospy.is_shutdown():
             prev_xyz[0] = initial_x
             prev_xyz[1] = prev_xyz[1] + 1
     p.publish(arr)
-    r.sleep()
+    time.sleep(1.0)
     counter = counter + 1
     if len(pictograms) == counter:
         counter = 0
