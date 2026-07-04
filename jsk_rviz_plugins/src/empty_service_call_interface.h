@@ -2,9 +2,12 @@
 #define EMPTY_SERCICE_CALL_INTERFACE_H
 
 #ifndef Q_MOC_RUN
-#include <ros/ros.h>
-#include <rviz/panel.h>
-#include <std_srvs/Empty.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rviz_common/panel.hpp>
+#include <std_srvs/srv/empty.hpp>
+#include <map>
+#include <string>
+#include <vector>
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #  include <QtWidgets>
 #else
@@ -21,21 +24,24 @@ namespace jsk_rviz_plugins
     std::string text;
   };
 
-  class EmptyServiceCallInterfaceAction: public rviz::Panel
+  class EmptyServiceCallInterfaceAction: public rviz_common::Panel
   {
     Q_OBJECT
     public:
     EmptyServiceCallInterfaceAction( QWidget* parent = 0 );
 
-    virtual void load( const rviz::Config& config );
-    virtual void save( rviz::Config config ) const;
+    virtual void onInitialize();
+
+    virtual void load( const rviz_common::Config& config );
+    virtual void save( rviz_common::Config config ) const;
 
   protected Q_SLOTS:
     void callRequestEmptyCommand(int button_id);
     void parseROSParameters();
   protected:
-    ros::NodeHandle nh_;
+    rclcpp::Node::SharedPtr nh_;
     std::vector<ServiceCallButtonInfo> service_call_button_infos_;
+    std::map<int, rclcpp::Client<std_srvs::srv::Empty>::SharedPtr> service_clients_;
     QVBoxLayout* layout;
     QHBoxLayout* h_layout;
     QSignalMapper* signal_mapper;

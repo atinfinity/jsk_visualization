@@ -34,109 +34,105 @@
  *********************************************************************/
 
 #include "linear_gauge_display.h"
-#include <rviz/uniform_string_stream.h>
-#include <rviz/display_context.h>
+#include <rviz_common/uniform_string_stream.hpp>
+#include <rviz_common/display_context.hpp>
 #include <QPainter>
+#include <iomanip>
 
 namespace jsk_rviz_plugins
 {
   LinearGaugeDisplay::LinearGaugeDisplay()
-    : rviz::Display(), data_(0.0), first_time_(true), 
-    width_padding_(5), height_padding_(5)
+    : RTDClass(), width_padding_(5), height_padding_(5),
+      data_(0.0), first_time_(true)
   {
-    update_topic_property_ = new rviz::RosTopicProperty(
-      "Topic", "",
-      ros::message_traits::datatype<std_msgs::Float32>(),
-      "std_msgs::Float32 topic to subscribe to.",
-      this, SLOT(updateTopic()));
-    show_value_property_ = new rviz::BoolProperty(
+    show_value_property_ = new rviz_common::properties::BoolProperty(
         "Show Value", true,
         "Show value on plotter",
         this, SLOT(updateShowValue()));
 
-    vertical_gauge_property_ = new rviz::BoolProperty(
+    vertical_gauge_property_ = new rviz_common::properties::BoolProperty(
         "Vertical Gauge", false,
         "set gauge vertical",
         this, SLOT(updateVerticalGauge()));
 
-    width_property_ = new rviz::IntProperty("width", 500,
+    width_property_ = new rviz_common::properties::IntProperty("width", 500,
                                             "width of the plotter window",
                                             this, SLOT(updateWidth()));
     width_property_->setMin(1);
     width_property_->setMax(2000);
-    height_property_ = new rviz::IntProperty("height", 50,
+    height_property_ = new rviz_common::properties::IntProperty("height", 50,
                                              "height of the plotter window",
                                              this, SLOT(updateHeight()));
     height_property_->setMin(1);
     height_property_->setMax(2000);
-    left_property_ = new rviz::IntProperty("left", 128,
+    left_property_ = new rviz_common::properties::IntProperty("left", 128,
                                            "left of the plotter window",
                                            this, SLOT(updateLeft()));
     left_property_->setMin(0);
-    top_property_ = new rviz::IntProperty("top", 128,
+    top_property_ = new rviz_common::properties::IntProperty("top", 128,
                                           "top of the plotter window",
                                           this, SLOT(updateTop()));
     top_property_->setMin(0);
 
-    max_value_property_ = new rviz::FloatProperty(
+    max_value_property_ = new rviz_common::properties::FloatProperty(
       "max value", 100.0,
       "max value, used only if auto scale is disabled",
       this, SLOT(updateMaxValue()));
-    min_value_property_ = new rviz::FloatProperty(
+    min_value_property_ = new rviz_common::properties::FloatProperty(
       "min value", 0.0,
       "min value, used only if auto scale is disabled",
       this, SLOT(updateMinValue()));
-    fg_color_property_ = new rviz::ColorProperty(
+    fg_color_property_ = new rviz_common::properties::ColorProperty(
       "foreground color", QColor(25, 255, 240),
       "color to draw line",
       this, SLOT(updateFGColor()));
-    fg_alpha_property_ = new rviz::FloatProperty(
+    fg_alpha_property_ = new rviz_common::properties::FloatProperty(
       "foreground alpha", 0.7,
       "alpha belnding value for foreground",
       this, SLOT(updateFGAlpha()));
     fg_alpha_property_->setMin(0);
     fg_alpha_property_->setMax(1.0);
-    bg_color_property_ = new rviz::ColorProperty(
+    bg_color_property_ = new rviz_common::properties::ColorProperty(
       "background color", QColor(0, 0, 0),
       "background color",
       this, SLOT(updateBGColor()));
-    bg_alpha_property_ = new rviz::FloatProperty(
+    bg_alpha_property_ = new rviz_common::properties::FloatProperty(
       "backround alpha", 0.0,
       "alpha belnding value for background",
       this, SLOT(updateBGAlpha()));
     bg_alpha_property_->setMin(0);
     bg_alpha_property_->setMax(1.0);
-    line_width_property_ = new rviz::IntProperty("linewidth", 1,
+    line_width_property_ = new rviz_common::properties::IntProperty("linewidth", 1,
                                                  "linewidth of the plot",
                                                  this, SLOT(updateLineWidth()));
     line_width_property_->setMin(1);
     line_width_property_->setMax(1000);
-    show_border_property_ = new rviz::BoolProperty(
+    show_border_property_ = new rviz_common::properties::BoolProperty(
       "border", true,
       "show border or not",
       this, SLOT(updateShowBorder()));
-    text_size_property_ = new rviz::IntProperty("text size", 12,
+    text_size_property_ = new rviz_common::properties::IntProperty("text size", 12,
                                                 "text size of the caption",
                                                 this, SLOT(updateTextSize()));
     text_size_property_->setMin(1);
     text_size_property_->setMax(1000);
-    show_caption_property_ = new rviz::BoolProperty(
+    show_caption_property_ = new rviz_common::properties::BoolProperty(
       "show caption", true,
       "show caption or not",
       this, SLOT(updateShowCaption()));
-    update_interval_property_ = new rviz::FloatProperty(
+    update_interval_property_ = new rviz_common::properties::FloatProperty(
       "update interval", 0.04,
       "update interval of the plotter",
       this, SLOT(updateUpdateInterval()));
     update_interval_property_->setMin(0.0);
     update_interval_property_->setMax(100);
     auto_color_change_property_
-      = new rviz::BoolProperty("auto color change",
+      = new rviz_common::properties::BoolProperty("auto color change",
                                false,
                                "change the color automatically",
                                this, SLOT(updateAutoColorChange()));
     max_color_property_
-      = new rviz::ColorProperty(
+      = new rviz_common::properties::ColorProperty(
         "max color",
         QColor(255, 0, 0),
         "only used if auto color change is set to True.",
@@ -146,35 +142,15 @@ namespace jsk_rviz_plugins
   LinearGaugeDisplay::~LinearGaugeDisplay()
   {
     onDisable();
-    // delete update_topic_property_;
-    // delete buffer_length_property_;
-    // delete fg_color_property_;
-    // delete bg_color_property_;
-    // delete fg_alpha_property_;
-    // delete bg_alpha_property_;
-    // delete top_property_;
-    // delete left_property_;
-    // delete width_property_;
-    // delete height_property_;
-    // delete line_width_property_;
-    // delete show_border_property_;
-    // delete auto_color_change_property_;
-    // delete max_color_property_;
-    // delete update_interval_property_;
-    // delete show_caption_property_;
-    // delete text_size_property_;
-    // delete min_value_property_;
-    // delete max_value_property_;
-    // delete auto_color_change_property_;
   }
 
   void LinearGaugeDisplay::onInitialize()
   {
+    RTDClass::onInitialize();
     static int count = 0;
-    rviz::UniformStringStream ss;
+    rviz_common::UniformStringStream ss;
     ss << "LinearGaugeDisplayObject" << count++;
     overlay_.reset(new OverlayObject(ss.str()));
-    onEnable();
     updateShowValue();
     updateVerticalGauge();
     updateWidth();
@@ -202,13 +178,12 @@ namespace jsk_rviz_plugins
   {
     QColor fg_color(fg_color_);
     QColor bg_color(bg_color_);
-    double max_gauge_length = 0.0;
-    
+
     fg_color.setAlpha(fg_alpha_);
     bg_color.setAlpha(bg_alpha_);
 
     if (auto_color_change_) {
-      double r 
+      double r
         = std::min(std::max(data_ / (max_value_ - min_value_),
                             0.0), 1.0);
       if (r > 0.3) {
@@ -221,13 +196,13 @@ namespace jsk_rviz_plugins
                          + fg_color_.blue());
       }
     }
-    
+
     {
       ScopedPixelBuffer buffer = overlay_->getBuffer();
       QImage Hud = buffer.getQImage(*overlay_);
       // initilize by the background color
-      for (int i = 0; i < overlay_->getTextureWidth(); i++) {
-        for (int j = 0; j < overlay_->getTextureHeight(); j++) {
+      for (unsigned int i = 0; i < overlay_->getTextureWidth(); i++) {
+        for (unsigned int j = 0; j < overlay_->getTextureHeight(); j++) {
           Hud.setPixel(i, j, bg_color.rgba());
         }
       }
@@ -236,7 +211,7 @@ namespace jsk_rviz_plugins
       QPainter painter( &Hud );
       painter.setRenderHint(QPainter::Antialiasing, true);
       painter.setPen(QPen(fg_color, line_width_, Qt::SolidLine));
-      
+
       uint16_t w = overlay_->getTextureWidth();
       uint16_t h = overlay_->getTextureHeight() - caption_offset_;
 
@@ -247,11 +222,11 @@ namespace jsk_rviz_plugins
         painter.fillRect(width_padding_, h-normalised_value-height_padding_, w-2*width_padding_, normalised_value, fg_color);
     }
     else
-    {   
+    {
         double normalised_value = std::min(std::max((double)data_ - min_value_, 0.0), max_value_ - min_value_)*(w-2*width_padding_)/(max_value_-min_value_);
         painter.fillRect(width_padding_, height_padding_, normalised_value, h-(2*height_padding_), fg_color);
     }
-  
+
       // draw border
       if (show_border_) {
         painter.drawLine(0, 0, 0, h);
@@ -296,15 +271,15 @@ namespace jsk_rviz_plugins
                          ss.str().c_str());
         }
       }
-      
+
       // done
       painter.end();
     }
   }
-  
-  void LinearGaugeDisplay::processMessage(const std_msgs::Float32::ConstPtr& msg)
+
+  void LinearGaugeDisplay::processMessage(std_msgs::msg::Float32::ConstSharedPtr msg)
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
 
     if (!isEnabled() || !overlay_->isVisible()) {
       return;
@@ -314,10 +289,10 @@ namespace jsk_rviz_plugins
       data_ = msg->data;
       draw_required_ = true;
     }
-    
+
   }
 
-  void LinearGaugeDisplay::update(float wall_dt, float ros_dt)
+  void LinearGaugeDisplay::update(float wall_dt, float /*ros_dt*/)
   {
     if (draw_required_) {
       if (wall_dt + last_time_ > update_interval_) {
@@ -334,61 +309,51 @@ namespace jsk_rviz_plugins
       }
     }
   }
-  
-  void LinearGaugeDisplay::subscribe()
-  {
-    std::string topic_name = update_topic_property_->getTopicStd();
-    if (topic_name.length() > 0 && topic_name != "/") {
-      ros::NodeHandle n;
-      sub_ = n.subscribe(topic_name, 1, &LinearGaugeDisplay::processMessage, this);
-    }
-  }
-
-  void LinearGaugeDisplay::unsubscribe()
-  {
-    sub_.shutdown();
-  }
 
   void LinearGaugeDisplay::onEnable()
   {
     last_time_ = 0;
     draw_required_ = false;
-    subscribe();
-    overlay_->show();
+    RTDClass::onEnable();
+    if (overlay_) {
+      overlay_->show();
+    }
   }
 
   void LinearGaugeDisplay::onDisable()
   {
-    unsubscribe();
-    overlay_->hide();
+    RTDClass::onDisable();
+    if (overlay_) {
+      overlay_->hide();
+    }
   }
 
   void LinearGaugeDisplay::updateWidth()
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     texture_width_ = width_property_->getInt();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateHeight()
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     texture_height_ = height_property_->getInt();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateTop()
   {
     top_ = top_property_->getInt();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateLeft()
   {
     left_ = left_property_->getInt();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateBGColor()
   {
     bg_color_ = bg_color_property_->getColor();
@@ -412,12 +377,6 @@ namespace jsk_rviz_plugins
     bg_alpha_ = bg_alpha_property_->getFloat() * 255.0;
     draw_required_ = true;
   }
-  
-  void LinearGaugeDisplay::updateTopic()
-  {
-    unsubscribe();
-    subscribe();
-  }
 
   void LinearGaugeDisplay::updateShowValue()
   {
@@ -430,19 +389,19 @@ namespace jsk_rviz_plugins
     vertical_gauge_ = vertical_gauge_property_->getBool();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateShowBorder()
   {
     show_border_ = show_border_property_->getBool();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateLineWidth()
   {
     line_width_ = line_width_property_->getInt();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateAutoColorChange()
   {
     auto_color_change_ = auto_color_change_property_->getBool();
@@ -460,7 +419,7 @@ namespace jsk_rviz_plugins
     max_color_ = max_color_property_->getColor();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateUpdateInterval()
   {
     update_interval_ = update_interval_property_->getFloat();
@@ -474,7 +433,7 @@ namespace jsk_rviz_plugins
     caption_offset_ = QFontMetrics(font).height();
     draw_required_ = true;
   }
-  
+
   void LinearGaugeDisplay::updateShowCaption()
   {
     show_caption_  = show_caption_property_->getBool();
@@ -517,8 +476,8 @@ namespace jsk_rviz_plugins
     left_property_->setValue(x);
   }
 
-  
+
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::LinearGaugeDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::LinearGaugeDisplay, rviz_common::Display )

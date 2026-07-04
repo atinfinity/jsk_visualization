@@ -34,45 +34,40 @@
  *********************************************************************/
 
 #include "diagnostics_display.h"
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/lexical_cast.hpp>
+#include <rviz_common/logging.hpp>
+#include <algorithm>
+#include <iterator>
 
 namespace jsk_rviz_plugins
 {
 
   DiagnosticsDisplay::DiagnosticsDisplay()
-    : rviz::Display(), msg_(0)
+    : RTDClass(), line_(NULL), msg_(NULL)
   {
-    ros_topic_property_
-      = new rviz::RosTopicProperty(
-        "Topic", "/diagnostics_agg",
-        ros::message_traits::datatype<diagnostic_msgs::DiagnosticArray>(),
-        "diagnostic_msgs::DiagnosticArray topic to subscribe to.",
-        this, SLOT( updateRosTopic() ));
-    frame_id_property_ = new rviz::TfFrameProperty(
-      "frame_id", rviz::TfFrameProperty::FIXED_FRAME_STRING,
+    frame_id_property_ = new rviz_common::properties::TfFrameProperty(
+      "frame_id", rviz_common::properties::TfFrameProperty::FIXED_FRAME_STRING,
       "the parent frame_id to visualize diagnostics",
       this, 0, true);
-    diagnostics_namespace_property_ = new rviz::EditableEnumProperty(
+    diagnostics_namespace_property_ = new rviz_common::properties::EditableEnumProperty(
       "diagnostics namespace", "/",
       "diagnostics namespace to visualize diagnostics",
       this, SLOT(updateDiagnosticsNamespace()));
-    radius_property_ = new rviz::FloatProperty(
+    radius_property_ = new rviz_common::properties::FloatProperty(
       "radius", 1.0,
       "radius of diagnostics circle",
       this, SLOT(updateRadius()));
-    line_width_property_ = new rviz::FloatProperty(
+    line_width_property_ = new rviz_common::properties::FloatProperty(
       "line width", 0.03,
       "line width",
       this, SLOT(updateLineWidth()));
-    axis_property_ = new rviz::EnumProperty(
+    axis_property_ = new rviz_common::properties::EnumProperty(
       "axis", "x",
       "axis",
       this, SLOT(updateAxis()));
     axis_property_->addOption("x", 0);
     axis_property_->addOption("y", 1);
     axis_property_->addOption("z", 2);
-    font_size_property_ = new rviz::FloatProperty(
+    font_size_property_ = new rviz_common::properties::FloatProperty(
       "font size", 0.05,
       "font size",
       this, SLOT(updateFontSize()));
@@ -80,7 +75,6 @@ namespace jsk_rviz_plugins
 
   DiagnosticsDisplay::~DiagnosticsDisplay()
   {
-    delete ros_topic_property_;
     delete frame_id_property_;
     delete diagnostics_namespace_property_;
     delete radius_property_;
@@ -91,7 +85,7 @@ namespace jsk_rviz_plugins
     delete font_size_property_;
   }
 
-  void DiagnosticsDisplay::update(float wall_dt, float ros_dt)
+  void DiagnosticsDisplay::update(float /*wall_dt*/, float ros_dt)
   {
     if (line_update_required_) {
       updateLine();
@@ -102,17 +96,17 @@ namespace jsk_rviz_plugins
     }
 
     msg_->setCharacterHeight(font_size_);
-    
+
     const float round_trip = 10.0;
     Ogre::Quaternion orientation;
     Ogre::Vector3 position;
     std::string frame_id = frame_id_property_->getFrame().toStdString();
     if( !context_->getFrameManager()->getTransform( frame_id,
-                                                    ros::Time(0.0),
                                                     position, orientation ))
     {
-      ROS_WARN( "Error transforming from frame '%s' to frame '%s'",
-                frame_id.c_str(), qPrintable( fixed_frame_ ));
+      RVIZ_COMMON_LOG_WARNING_STREAM(
+        "Error transforming from frame '" << frame_id
+        << "' to frame '" << qPrintable( fixed_frame_ ) << "'");
       return;
     }
     scene_node_->setPosition(position);
@@ -137,23 +131,24 @@ namespace jsk_rviz_plugins
       orbit_position.x = radius_ * sin(orbit_theta_);
       orbit_position.y = 0;
     }
-    
+
     orbit_node_->setPosition(orbit_position);
     if (!isEnabled()) {
       return;
     }
     context_->queueRender();
   }
-  
+
   void DiagnosticsDisplay::onInitialize()
   {
+    RTDClass::onInitialize();
     static int counter = 0;
     scene_node_ = scene_manager_->getRootSceneNode()->createChildSceneNode();
     orbit_node_ = scene_node_->createChildSceneNode(); // ??
-    line_ = new rviz::BillboardLine(context_->getSceneManager(), scene_node_);
-    msg_ = new rviz::MovableText("not initialized", "Liberation Sans", 0.05);
-    msg_->setTextAlignment(rviz::MovableText::H_CENTER,
-                           rviz::MovableText::V_ABOVE);
+    line_ = new rviz_rendering::BillboardLine(context_->getSceneManager(), scene_node_);
+    msg_ = new rviz_rendering::MovableText("not initialized", "Liberation Sans", 0.05);
+    msg_->setTextAlignment(rviz_rendering::MovableText::H_CENTER,
+                           rviz_rendering::MovableText::V_ABOVE);
     frame_id_property_->setFrameManager(context_->getFrameManager());
     orbit_node_->attachObject(msg_);
     msg_->setVisible(false);
@@ -162,12 +157,11 @@ namespace jsk_rviz_plugins
     updateAxis();
     updateDiagnosticsNamespace();
     updateRadius();
-    updateRosTopic();
     updateFontSize();
   }
-  
-  void DiagnosticsDisplay::processMessage
-  (const diagnostic_msgs::DiagnosticArray::ConstPtr& msg)
+
+  void DiagnosticsDisplay::processMessage(
+    diagnostic_msgs::msg::DiagnosticArray::ConstSharedPtr msg)
   {
     if (!isEnabled()) {
       return;
@@ -178,7 +172,7 @@ namespace jsk_rviz_plugins
     for (size_t i = 0; i < msg->status.size(); i++) {
       new_namespaces.insert(msg->status[i].name);
     }
-    
+
     std::set<std::string> difference_namespaces;
     std::set_difference(namespaces_.begin(), namespaces_.end(),
                         new_namespaces.begin(), new_namespaces.end(),
@@ -199,11 +193,11 @@ namespace jsk_rviz_plugins
         fillNamespaceList();
       }
     }
-    
+
     if (diagnostics_namespace_.length() == 0) {
       return;
     }
-    
+
     const float alpha = 0.8;
     const Ogre::ColourValue OK(0.3568627450980392, 0.7529411764705882, 0.8705882352941177, alpha);
     const Ogre::ColourValue WARN(0.9411764705882353, 0.6784313725490196, 0.3058823529411765, alpha);
@@ -213,17 +207,17 @@ namespace jsk_rviz_plugins
     std::string message;
     bool foundp = false;
     for (size_t i = 0; i < msg->status.size(); i++) {
-      diagnostic_msgs::DiagnosticStatus status = msg->status[i];
+      diagnostic_msgs::msg::DiagnosticStatus status = msg->status[i];
       if (status.name == diagnostics_namespace_) {
-        if (status.level == diagnostic_msgs::DiagnosticStatus::OK) {
+        if (status.level == diagnostic_msgs::msg::DiagnosticStatus::OK) {
           color = OK;
           message = status.message;
         }
-        else if (status.level == diagnostic_msgs::DiagnosticStatus::WARN) {
+        else if (status.level == diagnostic_msgs::msg::DiagnosticStatus::WARN) {
           color = WARN;
           message = status.message;
         }
-        else if (status.level == diagnostic_msgs::DiagnosticStatus::ERROR) {
+        else if (status.level == diagnostic_msgs::msg::DiagnosticStatus::ERROR) {
           color = ERROR;
           message = status.message;
         }
@@ -241,7 +235,7 @@ namespace jsk_rviz_plugins
       color = UNKNOWN;
       message = "stall";
     }
-    
+
     line_->setColor(color.r, color.g, color.b, color.a);
     Ogre::ColourValue font_color(color);
     font_color.a = 1.0;
@@ -278,45 +272,26 @@ namespace jsk_rviz_plugins
     }
     line_update_required_ = false;
   }
-  
+
   void DiagnosticsDisplay::onEnable()
   {
+    RTDClass::onEnable();
     line_update_required_ = true;
     msg_->setVisible(true);
   }
 
   void DiagnosticsDisplay::onDisable()
   {
-    unsubscribe();
+    RTDClass::onDisable();
     line_->clear();
     msg_->setVisible(false);
-  }
-  
-  void DiagnosticsDisplay::unsubscribe()
-  {
-    sub_.shutdown();
-  }
-  
-  void DiagnosticsDisplay::subscribe()
-  {
-    ros::NodeHandle n;
-    sub_ = n.subscribe(ros_topic_property_->getTopicStd(),
-                       1,
-                       &DiagnosticsDisplay::processMessage,
-                       this);
-  }
-  
-  void DiagnosticsDisplay::updateRosTopic()
-  {
-    unsubscribe();
-    subscribe();
   }
 
   void DiagnosticsDisplay::updateDiagnosticsNamespace()
   {
     diagnostics_namespace_ = diagnostics_namespace_property_->getStdString();
   }
-  
+
   void DiagnosticsDisplay::updateRadius()
   {
     radius_ = radius_property_->getFloat();
@@ -352,8 +327,8 @@ namespace jsk_rviz_plugins
   {
     font_size_ = font_size_property_->getFloat();
   }
-  
+
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::DiagnosticsDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::DiagnosticsDisplay, rviz_common::Display )

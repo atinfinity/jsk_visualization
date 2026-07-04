@@ -8,14 +8,15 @@
 #include <QLabel>
 #include <QTimer>
 
-#include <std_msgs/Empty.h>
+#include <std_msgs/msg/empty.hpp>
+#include <rviz_common/display_context.hpp>
 
 #include "publish_topic.h"
 
 namespace jsk_rviz_plugins
 {
   PublishTopic::PublishTopic( QWidget* parent )
-    : rviz::Panel( parent )
+    : rviz_common::Panel( parent )
   {
     QHBoxLayout* topic_layout = new QHBoxLayout;
     topic_layout->addWidget( new QLabel( "Topic:" ));
@@ -37,6 +38,11 @@ namespace jsk_rviz_plugins
 
   }
 
+  void PublishTopic::onInitialize()
+  {
+    nh_ = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
+  }
+
   void PublishTopic::updateTopic()
   {
     setTopic( output_topic_editor_->text() );
@@ -50,35 +56,38 @@ namespace jsk_rviz_plugins
       {
 	output_topic_ = new_topic;
 	// If the topic is the empty string, don't publish anything.
-	if( output_topic_ == "" )
+	if( output_topic_ == "" || !nh_ )
 	  {
-	    velocity_publisher_.shutdown();
+	    velocity_publisher_.reset();
 	  }
 	else
 	  {
-	    velocity_publisher_ = nh_.advertise<std_msgs::Empty>( output_topic_.toStdString(), 1 );
+	    velocity_publisher_ = nh_->create_publisher<std_msgs::msg::Empty>( output_topic_.toStdString(), 1 );
 	  }
 
 	Q_EMIT configChanged();
       }
   }
-  
+
   void PublishTopic::sendTopic(){
-    std_msgs::Empty msg;
-    velocity_publisher_.publish(msg);
+    if( velocity_publisher_ )
+      {
+	std_msgs::msg::Empty msg;
+	velocity_publisher_->publish(msg);
+      }
   }
 
 
-  void PublishTopic::save( rviz::Config config ) const
+  void PublishTopic::save( rviz_common::Config config ) const
   {
-    rviz::Panel::save( config );
+    rviz_common::Panel::save( config );
     config.mapSetValue( "Topic", output_topic_ );
   }
 
   // Load all configuration data for this panel from the given Config object.
-  void PublishTopic::load( const rviz::Config& config )
+  void PublishTopic::load( const rviz_common::Config& config )
   {
-    rviz::Panel::load( config );
+    rviz_common::Panel::load( config );
     QString topic;
     if( config.mapGetString( "Topic", &topic ))
       {
@@ -89,6 +98,5 @@ namespace jsk_rviz_plugins
 
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::PublishTopic, rviz::Panel )
-
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::PublishTopic, rviz_common::Panel )

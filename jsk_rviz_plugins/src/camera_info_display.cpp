@@ -33,15 +33,18 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <rviz/uniform_string_stream.h>
-#include <image_transport/image_transport.h>
+#include <rviz_common/uniform_string_stream.hpp>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/properties/parse_color.hpp>
+#include <rviz_common/properties/status_property.hpp>
+#include <image_transport/image_transport.hpp>
 #include "camera_info_display.h"
-#include <OGRE/OgreMaterialManager.h>
-#include <OGRE/OgreMaterial.h>
-#include <OGRE/OgreBlendMode.h>
+#include <OgreMaterialManager.h>
+#include <OgreMaterial.h>
+#include <OgreBlendMode.h>
 #include <QImage>
-#include <OGRE/OgreHardwarePixelBuffer.h>
-#include <sensor_msgs/image_encodings.h>
+#include <OgreHardwarePixelBuffer.h>
+#include <sensor_msgs/image_encodings.hpp>
 
 namespace enc = sensor_msgs::image_encodings;
 
@@ -109,35 +112,36 @@ namespace jsk_rviz_plugins
     ////////////////////////////////////////////////////////
     // initialize properties
     ////////////////////////////////////////////////////////
-    far_clip_distance_property_ = new rviz::FloatProperty(
+    far_clip_distance_property_ = new rviz_common::properties::FloatProperty(
       "far clip",
       1.0,
       "far clip distance from the origin of camera info",
       this, SLOT(updateFarClipDistance()));
-    show_edges_property_ = new rviz::BoolProperty(
+    show_edges_property_ = new rviz_common::properties::BoolProperty(
       "show edges",
       true,
       "show edges of the region of the camera info",
       this, SLOT(updateShowEdges()));
-    show_polygons_property_ = new rviz::BoolProperty(
+    show_polygons_property_ = new rviz_common::properties::BoolProperty(
       "show polygons",
       true,
       "show polygons of the region of the camera info",
       this, SLOT(updateShowPolygons()));
-    not_show_side_polygons_property_ = new rviz::BoolProperty(
+    not_show_side_polygons_property_ = new rviz_common::properties::BoolProperty(
       "not show side polygons",
       true,
       "do not show polygons of the region of the camera info",
       this, SLOT(updateNotShowSidePolygons()));
-    use_image_property_ = new rviz::BoolProperty(
+    use_image_property_ = new rviz_common::properties::BoolProperty(
       "use image",
       false,
       "use image as texture",
       this, SLOT(updateUseImage()));
-    image_topic_property_ = new rviz::RosTopicProperty(
+    image_topic_property_ = new rviz_common::properties::RosTopicProperty(
       "Image Topic", "",
-      ros::message_traits::datatype<sensor_msgs::Image>(),
-      "sensor_msgs::Image topic to subscribe to.",
+      QString::fromStdString(
+        rosidl_generator_traits::name<sensor_msgs::msg::Image>()),
+      "sensor_msgs::msg::Image topic to subscribe to.",
       this, SLOT( updateImageTopic() ));
     image_topic_property_->hide();
     image_transport_hints_property_ = new ImageTransportHintsProperty(
@@ -146,17 +150,17 @@ namespace jsk_rviz_plugins
       this, SLOT( updateImageTopic() ));
     image_transport_hints_property_->hide();
 
-    color_property_ = new rviz::ColorProperty(
+    color_property_ = new rviz_common::properties::ColorProperty(
       "color",
       QColor(85, 255, 255),
       "color of CameraInfo",
       this, SLOT(updateColor()));
-    edge_color_property_ = new rviz::ColorProperty(
+    edge_color_property_ = new rviz_common::properties::ColorProperty(
       "edge color",
       QColor(125, 125, 125),
       "edge color of CameraInfo",
       this, SLOT(updateEdgeColor()));
-    alpha_property_ = new rviz::FloatProperty(
+    alpha_property_ = new rviz_common::properties::FloatProperty(
       "alpha",
       0.5,
       "alpha blending value",
@@ -183,12 +187,13 @@ namespace jsk_rviz_plugins
       edges_->clear();
     }
     polygons_.clear();
-    camera_info_ = sensor_msgs::CameraInfo::ConstPtr(); // reset to NULL
+    camera_info_ = sensor_msgs::msg::CameraInfo::ConstSharedPtr(); // reset to NULL
   }
 
   void CameraInfoDisplay::onInitialize()
   {
     MFDClass::onInitialize();
+    image_topic_property_->initialize(rviz_ros_node_);
     scene_node_ = scene_manager_->getRootSceneNode()->createChildSceneNode();
     updateColor();
     updateAlpha();
@@ -202,7 +207,7 @@ namespace jsk_rviz_plugins
   }
 
   void CameraInfoDisplay::processMessage(
-    const sensor_msgs::CameraInfo::ConstPtr& msg)
+    sensor_msgs::msg::CameraInfo::ConstSharedPtr msg)
   {
     if (!isSameCameraInfo(msg)) {
       createCameraInfoShapes(msg);
@@ -218,21 +223,21 @@ namespace jsk_rviz_plugins
                                                    msg->header.stamp,
                                                    position,
                                                    quaternion)) {
-       ROS_ERROR( "Error transforming pose '%s' from frame '%s' to frame '%s'",
-                  qPrintable( getName() ), msg->header.frame_id.c_str(),
-                  qPrintable( fixed_frame_ ));
+       RVIZ_COMMON_LOG_ERROR_STREAM(
+         "Error transforming pose '" << qPrintable( getName() )
+         << "' from frame '" << msg->header.frame_id
+         << "' to frame '" << qPrintable( fixed_frame_ ) << "'");
      }
      scene_node_->setPosition(position);
      scene_node_->setOrientation(quaternion);
      camera_info_ = msg;        // store for caching
   }
 
-  void CameraInfoDisplay::update(float wall_dt, float ros_dt)
+  void CameraInfoDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     if (image_updated_) {
-      ROS_DEBUG("image updated");
-      if (!bottom_texture_.isNull()) {
+      if (bottom_texture_ != nullptr) {
         drawImageTexture();
         image_updated_ = false;
       }
@@ -240,7 +245,7 @@ namespace jsk_rviz_plugins
   }
 
   bool CameraInfoDisplay::isSameCameraInfo(
-    const sensor_msgs::CameraInfo::ConstPtr& msg)
+    const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg)
   {
     if (camera_info_) {
       bool meta_same_p =
@@ -253,8 +258,8 @@ namespace jsk_rviz_plugins
         msg->roi.height == camera_info_->roi.height &&
         msg->roi.width == camera_info_->roi.width;
       if (meta_same_p) {
-        for (size_t i = 0; i < msg->P.size(); i++) {
-          if (msg->P[i] != camera_info_->P[i]) {
+        for (size_t i = 0; i < msg->p.size(); i++) {
+          if (msg->p[i] != camera_info_->p[i]) {
             return false;
           }
         }
@@ -282,7 +287,7 @@ namespace jsk_rviz_plugins
   void CameraInfoDisplay::addPolygon(
     const cv::Point3d& O, const cv::Point3d& A, const cv::Point3d& B, std::string name, bool use_color, bool upper_triangle)
   {
-    Ogre::ColourValue color = rviz::qtToOgre(color_);
+    Ogre::ColourValue color = rviz_common::properties::qtToOgre(color_);
     color.a = alpha_;
     TrianglePolygon::Ptr triangle (new TrianglePolygon(
                                      scene_manager_,
@@ -296,11 +301,11 @@ namespace jsk_rviz_plugins
 
   void CameraInfoDisplay::createTextureForBottom(int width, int height)
   {
-    if (bottom_texture_.isNull()
-        || bottom_texture_->getWidth() != width
-        || bottom_texture_->getHeight() != height) {
+    if (bottom_texture_ == nullptr
+        || bottom_texture_->getWidth() != static_cast<unsigned int>(width)
+        || bottom_texture_->getHeight() != static_cast<unsigned int>(height)) {
       static uint32_t count = 0;
-      rviz::UniformStringStream ss;
+      rviz_common::UniformStringStream ss;
       ss << "CameraInfoDisplayPolygonBottom" << count++;
       material_bottom_
         = Ogre::MaterialManager::getSingleton().create(
@@ -311,7 +316,7 @@ namespace jsk_rviz_plugins
         Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
         Ogre::TEX_TYPE_2D, width, height, 0, Ogre::PF_A8R8G8B8, Ogre::TU_DEFAULT);
       material_bottom_->getTechnique(0)->getPass(0)->setColourWriteEnabled(true);
-      Ogre::ColourValue color = rviz::qtToOgre(color_);
+      Ogre::ColourValue color = rviz_common::properties::qtToOgre(color_);
       color.a = alpha_;
       material_bottom_->getTechnique(0)->getPass(0)->setAmbient(color);
       material_bottom_->setReceiveShadows(false);
@@ -329,10 +334,10 @@ namespace jsk_rviz_plugins
 
   void CameraInfoDisplay::prepareMaterial()
   {
-    if (texture_.isNull()) {
+    if (texture_ == nullptr) {
       // material
       static uint32_t count = 0;
-      rviz::UniformStringStream ss;
+      rviz_common::UniformStringStream ss;
       ss << "CameraInfoDisplayPolygon" << count++;
       material_
         = Ogre::MaterialManager::getSingleton().create(
@@ -343,7 +348,7 @@ namespace jsk_rviz_plugins
         Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
         Ogre::TEX_TYPE_2D, 1, 1, 0, Ogre::PF_A8R8G8B8, Ogre::TU_DEFAULT);
       material_->getTechnique(0)->getPass(0)->setColourWriteEnabled(true);
-      Ogre::ColourValue color = rviz::qtToOgre(color_);
+      Ogre::ColourValue color = rviz_common::properties::qtToOgre(color_);
       color.a = alpha_;
       material_->getTechnique(0)->getPass(0)->setAmbient(color);
       material_->setReceiveShadows(false);
@@ -362,15 +367,19 @@ namespace jsk_rviz_plugins
 
   void CameraInfoDisplay::subscribeImage(std::string topic)
   {
-
     image_sub_.shutdown();
     if (topic.empty()) {
-      ROS_WARN("topic name is empty");
+      RVIZ_COMMON_LOG_WARNING("topic name is empty");
+      return;
     }
-    ros::NodeHandle nh;
-    image_transport::ImageTransport it(nh);
-    image_sub_ = it.subscribe(topic, 1, &CameraInfoDisplay::imageCallback, this,
-                              image_transport_hints_property_->getTransportHints());
+    rclcpp::Node::SharedPtr node = rviz_ros_node_.lock()->get_raw_node();
+    image_sub_ = image_transport::create_subscription(
+      node.get(), topic,
+      [this](const sensor_msgs::msg::Image::ConstSharedPtr & msg) {
+        imageCallback(msg);
+      },
+      image_transport_hints_property_->getTransportHints(),
+      rmw_qos_profile_sensor_data);
   }
 
   void CameraInfoDisplay::drawImageTexture()
@@ -383,13 +392,8 @@ namespace jsk_rviz_plugins
     // Don't copy pixel-by-pixel image matrices.
     // Just split matrix into channels, add needed alpha channel and merge back directly into buffer.
     if (use_image_ && !image_.empty() &&
-        bottom_texture_->getHeight() == image_.rows &&
-        bottom_texture_->getWidth() == image_.cols) {
-      ROS_DEBUG("bottom_texture_->getHeight(): %u", bottom_texture_->getHeight());
-      ROS_DEBUG("bottom_texture_->getWidth(): %u", bottom_texture_->getWidth());
-      ROS_DEBUG("image_.rows: %d", image_.rows);
-      ROS_DEBUG("image_.cols: %d", image_.cols);
-
+        bottom_texture_->getHeight() == static_cast<unsigned int>(image_.rows) &&
+        bottom_texture_->getWidth() == static_cast<unsigned int>(image_.cols)) {
       std::vector<cv::Mat> splitted;
       cv::split(image_, splitted);
       // Swap channels RGB -> BGR for cv::merge.
@@ -410,11 +414,11 @@ namespace jsk_rviz_plugins
     bottom_texture_->getBuffer()->unlock();
   }
 
-  // convert sensor_msgs::Image into cv::Mat
+  // convert sensor_msgs::msg::Image into cv::Mat
   void CameraInfoDisplay::imageCallback(
-      const sensor_msgs::Image::ConstPtr& msg)
+      const sensor_msgs::msg::Image::ConstSharedPtr& msg)
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     cv_bridge::CvImageConstPtr cv_ptr;
     if (!camera_info_) {
       return;
@@ -448,7 +452,8 @@ namespace jsk_rviz_plugins
         im.convertTo(im, CV_8U, 1 / 256.0);
         cv::cvtColor(im, im, cv::COLOR_GRAY2RGB);
       } else {
-        ROS_ERROR("[CameraInfoDisplay] Not supported image encodings %s.", msg->encoding.c_str());
+        RVIZ_COMMON_LOG_ERROR_STREAM(
+          "[CameraInfoDisplay] Not supported image encodings " << msg->encoding << ".");
         return;
       }
 
@@ -461,7 +466,8 @@ namespace jsk_rviz_plugins
         roi_width /= camera_info_->binning_x;
       }
 
-      if (im.cols == camera_info_->width && im.rows == camera_info_->height) {
+      if (im.cols == static_cast<int>(camera_info_->width) &&
+          im.rows == static_cast<int>(camera_info_->height)) {
         cv::Rect roi(camera_info_->roi.x_offset, camera_info_->roi.y_offset,
                      camera_info_->roi.width ? camera_info_->roi.width : camera_info_->width,
                      camera_info_->roi.height ? camera_info_->roi.height : camera_info_->height);
@@ -469,17 +475,17 @@ namespace jsk_rviz_plugins
       } else if (im.cols == roi_width && im.rows == roi_height) {
         image_ = im.clone();
       } else {
-        ROS_ERROR("[CameraInfoDisplay] Invalid image size (w, h) = (%d, %d), expected (w, h) = (%d, %d) or (%d, %d) (ROI size)",
-                  im.cols, im.rows,
-                  camera_info_->width, camera_info_->height,
-                  roi_width, roi_height);
+        RVIZ_COMMON_LOG_ERROR_STREAM(
+          "[CameraInfoDisplay] Invalid image size (w, h) = (" << im.cols << ", " << im.rows
+          << "), expected (w, h) = (" << camera_info_->width << ", " << camera_info_->height
+          << ") or (" << roi_width << ", " << roi_height << ") (ROI size)");
         return;
       }
 
       // check the size of bottom texture
-      if (bottom_texture_.isNull()
-          || bottom_texture_->getWidth() != image_.cols
-          || bottom_texture_->getHeight() != image_.rows) {
+      if (bottom_texture_ == nullptr
+          || bottom_texture_->getWidth() != static_cast<unsigned int>(image_.cols)
+          || bottom_texture_->getHeight() != static_cast<unsigned int>(image_.rows)) {
         createTextureForBottom(image_.cols, image_.rows);
         if (camera_info_) {
           createCameraInfoShapes(camera_info_);
@@ -489,12 +495,12 @@ namespace jsk_rviz_plugins
     }
     catch (cv_bridge::Exception& e)
     {
-      ROS_ERROR("cv_bridge exception: %s", e.what());
+      RVIZ_COMMON_LOG_ERROR_STREAM("cv_bridge exception: " << e.what());
     }
   }
 
   void CameraInfoDisplay::createCameraInfoShapes(
-    const sensor_msgs::CameraInfo::ConstPtr& msg)
+    const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg)
   {
     polygons_.clear();
     if (edges_) {
@@ -503,23 +509,23 @@ namespace jsk_rviz_plugins
     image_geometry::PinholeCameraModel model;
     bool model_success_p = model.fromCameraInfo(msg);
     if (!model_success_p) {
-      setStatus(rviz::StatusProperty::Error, "Camera Info", "Failed to create camera model from msg");
-      ROS_ERROR("failed to create camera model");
+      setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info", "Failed to create camera model from msg");
+      RVIZ_COMMON_LOG_ERROR("failed to create camera model");
       return;
     }
     // fx and fy should not be equal 0.
     if (model.fx() == 0.0 || model.fy() == 0.0) {
-      setStatus(rviz::StatusProperty::Error, "Camera Info", "Invalid intrinsic matrix");
-      ROS_ERROR_STREAM("camera model have invalid intrinsic matrix " << model.intrinsicMatrix());
+      setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info", "Invalid intrinsic matrix");
+      RVIZ_COMMON_LOG_ERROR_STREAM("camera model have invalid intrinsic matrix " << model.intrinsicMatrix());
       return;
     }
-    setStatus(rviz::StatusProperty::Ok, "Camera Info", "OK");
+    setStatus(rviz_common::properties::StatusProperty::Ok, "Camera Info", "OK");
 
     ////////////////////////////////////////////////////////
     // initialize BillboardLine
     ////////////////////////////////////////////////////////
     if (!edges_) {
-      edges_.reset(new rviz::BillboardLine(context_->getSceneManager(),
+      edges_.reset(new rviz_rendering::BillboardLine(context_->getSceneManager(),
                                            scene_node_));
       edges_->setLineWidth(0.01);
     }
@@ -555,7 +561,7 @@ namespace jsk_rviz_plugins
       ////////////////////////////////////////////////////////
       // setup color for polygons
       ////////////////////////////////////////////////////////
-      Ogre::ColourValue color = rviz::qtToOgre(color_);
+      Ogre::ColourValue color = rviz_common::properties::qtToOgre(color_);
       color.a = alpha_;
       prepareMaterial();
       if (!not_show_side_polygons_) {
@@ -592,13 +598,13 @@ namespace jsk_rviz_plugins
                        edge_color_.green() / 255.0,
                        edge_color_.blue() / 255.0,
                        alpha_);
-      addPointToEdge(O); addPointToEdge(scaled_A); edges_->newLine();
-      addPointToEdge(O); addPointToEdge(scaled_B); edges_->newLine();
-      addPointToEdge(O); addPointToEdge(scaled_C); edges_->newLine();
-      addPointToEdge(O); addPointToEdge(scaled_D); edges_->newLine();
-      addPointToEdge(scaled_A); addPointToEdge(scaled_B); edges_->newLine();
-      addPointToEdge(scaled_B); addPointToEdge(scaled_C); edges_->newLine();
-      addPointToEdge(scaled_C); addPointToEdge(scaled_D); edges_->newLine();
+      addPointToEdge(O); addPointToEdge(scaled_A); edges_->finishLine();
+      addPointToEdge(O); addPointToEdge(scaled_B); edges_->finishLine();
+      addPointToEdge(O); addPointToEdge(scaled_C); edges_->finishLine();
+      addPointToEdge(O); addPointToEdge(scaled_D); edges_->finishLine();
+      addPointToEdge(scaled_A); addPointToEdge(scaled_B); edges_->finishLine();
+      addPointToEdge(scaled_B); addPointToEdge(scaled_C); edges_->finishLine();
+      addPointToEdge(scaled_C); addPointToEdge(scaled_D); edges_->finishLine();
       addPointToEdge(scaled_D); addPointToEdge(scaled_A);
     }
   }
@@ -695,5 +701,5 @@ namespace jsk_rviz_plugins
 }
 
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::CameraInfoDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::CameraInfoDisplay, rviz_common::Display )

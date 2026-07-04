@@ -10,32 +10,31 @@
 #include <QColor>
 #include <QFont>
 
-#include "rviz/properties/property_tree_widget.h"
-#include "rviz/selection/selection_manager.h"
-#include "rviz/visualization_manager.h"
+#include "rviz_common/properties/property_tree_widget.hpp"
+#include "rviz_common/interaction/selection_manager_iface.hpp"
+#include "rviz_common/display_context.hpp"
 
-#include "rviz/config.h"
-#include "rviz/properties/property_tree_model.h"
-#include "rviz/properties/status_list.h"
-#include "rviz/properties/property.h"
-#include "rviz/properties/vector_property.h"
-#include "rviz/properties/color_property.h"
+#include "rviz_common/config.hpp"
+#include "rviz_common/properties/property_tree_model.hpp"
+#include "rviz_common/properties/status_list.hpp"
+#include "rviz_common/properties/property.hpp"
+#include "rviz_common/properties/vector_property.hpp"
+#include "rviz_common/properties/color_property.hpp"
 
-#include <std_msgs/Empty.h>
-#include <sensor_msgs/PointCloud2.h>
+#include <std_msgs/msg/empty.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/msg/point_field.hpp>
 
 #include "select_point_cloud_publish_action.h"
-#include "ros/time.h"
 
-using namespace rviz;
+using namespace rviz_common;
 
 namespace jsk_rviz_plugins
 {
 
   SelectPointCloudPublishAction::SelectPointCloudPublishAction( QWidget* parent )
-    : rviz::Panel( parent )
+    : rviz_common::Panel( parent )
   {
-    select_pointcloud_publisher_ = nh_.advertise<sensor_msgs::PointCloud2>("selected_pointcloud", 1);
     layout = new QVBoxLayout;
 
     //Button to send cancel topic
@@ -47,14 +46,20 @@ namespace jsk_rviz_plugins
     connect( publish_pointcloud_button_, SIGNAL( clicked() ), this, SLOT( publishPointCloud ()));
   }
 
+  void SelectPointCloudPublishAction::onInitialize()
+  {
+    nh_ = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
+    select_pointcloud_publisher_ = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("selected_pointcloud", 1);
+  }
+
   void SelectPointCloudPublishAction::publishPointCloud(){
-    PropertyTreeModel* model_ =vis_manager_->getSelectionManager()->getPropertyModel();
+    properties::PropertyTreeModel* model_ = getDisplayContext()->getSelectionManager()->getPropertyModel();
     int num_children = model_->rowCount();
     if( num_children > 0 )
       {
-        ROS_INFO("num > %d!", num_children);
-        sensor_msgs::PointCloud2 pc2;
-        pc2.header.stamp = ros::Time::now();
+        RCLCPP_INFO(nh_->get_logger(), "num > %d!", num_children);
+        sensor_msgs::msg::PointCloud2 pc2;
+        pc2.header.stamp = nh_->now();
         pc2.header.frame_id = "camera_depth_optical_frame";
         pc2.height = 1;
         pc2.width  = num_children;
@@ -69,14 +74,23 @@ namespace jsk_rviz_plugins
         pc2.fields[2].offset = 8;
         pc2.fields[3].offset = 12;
         pc2.fields[0].count =  pc2.fields[1].count =  pc2.fields[2].count =  pc2.fields[3].count = 1;
-        pc2.fields[0].datatype =  pc2.fields[1].datatype =  pc2.fields[2].datatype =  pc2.fields[3].datatype = sensor_msgs::PointField::FLOAT32;
+        pc2.fields[0].datatype =  pc2.fields[1].datatype =  pc2.fields[2].datatype =  pc2.fields[3].datatype = sensor_msgs::msg::PointField::FLOAT32;
 
         pc2.data.resize(num_children * 4 * sizeof(float));
+        int point_count = 0;
         for( int i = 0; i < num_children; i++ )
           {
             QModelIndex child_index = model_->index( i, 0, QModelIndex());
-            VectorProperty* vec_data = qobject_cast<VectorProperty* >(model_->getProp( child_index )->childAt(0));
-            ColorProperty* color_data = qobject_cast<ColorProperty* >(model_->getProp( child_index )->childAt(1));
+            properties::Property* child_property = model_->getProp( child_index );
+            if (child_property->numChildren() < 1) {
+              continue;
+            }
+            properties::VectorProperty* vec_data = qobject_cast<properties::VectorProperty* >(child_property->childAt(0));
+            properties::ColorProperty* color_data = qobject_cast<properties::ColorProperty* >(
+              child_property->numChildren() > 1 ? child_property->childAt(1) : NULL);
+            if (vec_data == NULL) {
+              continue;
+            }
 
             Ogre::Vector3 point_vec = vec_data->getVector();
             // check if color_data is available
@@ -89,31 +103,39 @@ namespace jsk_rviz_plugins
             float x = point_vec.x, y = point_vec.y, z = point_vec.z;
             //Tty to add color, but point_color's value are all zero!!!!!!
             float rgb_float = *reinterpret_cast<float*>(&rgb_int);
-            memcpy(&pc2.data[i*4*sizeof(float)], &x, sizeof(float));
-            memcpy(&pc2.data[(i*4+1)*sizeof(float)], &y, sizeof(float));
-            memcpy(&pc2.data[(i*4+2)*sizeof(float)], &z, sizeof(float));
-            memcpy(&pc2.data[(i*4+3)*sizeof(float)], &rgb_float, sizeof(float));
+            memcpy(&pc2.data[point_count*4*sizeof(float)], &x, sizeof(float));
+            memcpy(&pc2.data[(point_count*4+1)*sizeof(float)], &y, sizeof(float));
+            memcpy(&pc2.data[(point_count*4+2)*sizeof(float)], &z, sizeof(float));
+            memcpy(&pc2.data[(point_count*4+3)*sizeof(float)], &rgb_float, sizeof(float));
+            point_count++;
           }
+        if (point_count == 0) {
+          RCLCPP_WARN(nh_->get_logger(),
+                      "No point could be extracted from the current selection.");
+          return;
+        }
+        pc2.width = point_count;
+        pc2.data.resize(point_count * 4 * sizeof(float));
 
         pc2.point_step = 16;
         pc2.row_step = pc2.point_step * pc2.width;
         pc2.is_dense = false;
-        select_pointcloud_publisher_.publish(pc2);
+        select_pointcloud_publisher_->publish(pc2);
       }
   }
 
-  void SelectPointCloudPublishAction::save( rviz::Config config ) const
+  void SelectPointCloudPublishAction::save( rviz_common::Config config ) const
   {
-    rviz::Panel::save( config );
+    rviz_common::Panel::save( config );
   }
 
   // Load all configuration data for this panel from the given Config object.
-  void SelectPointCloudPublishAction::load( const rviz::Config& config )
+  void SelectPointCloudPublishAction::load( const rviz_common::Config& config )
   {
-    rviz::Panel::load( config );
+    rviz_common::Panel::load( config );
   }
 
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::SelectPointCloudPublishAction, rviz::Panel )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::SelectPointCloudPublishAction, rviz_common::Panel )

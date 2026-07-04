@@ -39,50 +39,54 @@
 
 
 #ifndef Q_MOC_RUN
-#include <rviz/display.h>
-#include <rviz/message_filter_display.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/properties/color_property.h>
-#include <rviz/properties/string_property.h>
-#include <rviz/properties/editable_enum_property.h>
-#include <rviz/properties/tf_frame_property.h>
-#include <rviz/properties/ros_topic_property.h>
-#include <rviz/properties/enum_property.h>
-#include <rviz/display_context.h>
-#include <rviz/frame_manager.h>
-#include <people_msgs/PositionMeasurementArray.h>
+#include <mutex>
+
+#include <rviz_common/display.hpp>
+#include <rviz_common/message_filter_display.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/color_property.hpp>
+#include <rviz_common/properties/string_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/editable_enum_property.hpp>
+#include <rviz_common/properties/tf_frame_property.hpp>
+#include <rviz_common/properties/ros_topic_property.hpp>
+#include <rviz_common/properties/enum_property.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <people_msgs/msg/position_measurement_array.hpp>
 #include "overlay_utils.h"
 #include "facing_visualizer.h"
 #endif
 
 namespace jsk_rviz_plugins
 {
-  
+
   class PeoplePositionMeasurementArrayDisplay:
-    public rviz::MessageFilterDisplay<people_msgs::PositionMeasurementArray>
+    public rviz_common::MessageFilterDisplay<people_msgs::msg::PositionMeasurementArray>
   {
     Q_OBJECT
   public:
     PeoplePositionMeasurementArrayDisplay();
     virtual ~PeoplePositionMeasurementArrayDisplay();
   protected:
-    virtual void onInitialize();
-    virtual void reset();
-    void processMessage(const people_msgs::PositionMeasurementArray::ConstPtr& msg);
-    void update(float wall_dt, float ros_dt);
+    void onInitialize() override;
+    void reset() override;
+    void processMessage(
+      people_msgs::msg::PositionMeasurementArray::ConstSharedPtr msg) override;
+    void update(float wall_dt, float ros_dt) override;
     void clearObjects();
-    rviz::FloatProperty* size_property_;
-    rviz::FloatProperty* timeout_property_;
-    rviz::BoolProperty* anonymous_property_;
-    rviz::StringProperty* text_property_;
-    boost::mutex mutex_;
+    rviz_common::properties::FloatProperty* size_property_;
+    rviz_common::properties::FloatProperty* timeout_property_;
+    rviz_common::properties::BoolProperty* anonymous_property_;
+    rviz_common::properties::StringProperty* text_property_;
+    std::mutex mutex_;
     double size_;
     double timeout_;
     bool anonymous_;
     std::string text_;
-    std::vector<people_msgs::PositionMeasurement> faces_;
+    std::vector<people_msgs::msg::PositionMeasurement> faces_;
     std::vector<GISCircleVisualizer::Ptr> visualizers_;
-    ros::Time latest_time_;
+    rclcpp::Time latest_time_;
   private Q_SLOTS:
     void updateSize();
     void updateTimeout();

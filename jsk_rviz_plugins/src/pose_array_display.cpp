@@ -31,14 +31,16 @@
 #include <OgreSceneManager.h>
 #include <OgreSceneNode.h>
 
-#include "rviz/display_context.h"
-#include "rviz/frame_manager.h"
-#include "rviz/properties/color_property.h"
-#include "rviz/properties/float_property.h"
-#include "rviz/properties/enum_property.h"
-#include "rviz/validate_floats.h"
-#include "rviz/ogre_helpers/arrow.h"
-#include "rviz/ogre_helpers/axes.h"
+#include "rviz_common/display_context.hpp"
+#include "rviz_common/frame_manager_iface.hpp"
+#include "rviz_common/logging.hpp"
+#include "rviz_common/properties/color_property.hpp"
+#include "rviz_common/properties/float_property.hpp"
+#include "rviz_common/properties/enum_property.hpp"
+#include "rviz_common/properties/status_property.hpp"
+#include "rviz_common/validate_floats.hpp"
+#include "rviz_rendering/objects/arrow.hpp"
+#include "rviz_rendering/objects/axes.hpp"
 
 #include "pose_array_display.h"
 
@@ -48,13 +50,13 @@ namespace jsk_rviz_plugins
 PoseArrayDisplay::PoseArrayDisplay()
   : manual_object_( NULL )
 {
-  color_property_ = new rviz::ColorProperty( "Color", QColor( 255, 25, 0 ), "Color to draw the arrows.", this );
-  length_property_ = new rviz::FloatProperty( "Arrow Length", 0.3, "Length of the arrows.", this );
-  axes_length_property_ = new rviz::FloatProperty( "Axes Length", 1, "Length of each axis, in meters.",
+  color_property_ = new rviz_common::properties::ColorProperty( "Color", QColor( 255, 25, 0 ), "Color to draw the arrows.", this );
+  length_property_ = new rviz_common::properties::FloatProperty( "Arrow Length", 0.3, "Length of the arrows.", this );
+  axes_length_property_ = new rviz_common::properties::FloatProperty( "Axes Length", 1, "Length of each axis, in meters.",
                                              this, SLOT( updateAxisGeometry() ));
-  axes_radius_property_ = new rviz::FloatProperty( "Axes Radius", 0.1, "Radius of each axis, in meters.",
+  axes_radius_property_ = new rviz_common::properties::FloatProperty( "Axes Radius", 0.1, "Radius of each axis, in meters.",
                                              this, SLOT( updateAxisGeometry() ));
-  shape_property_ = new rviz::EnumProperty( "Shape", "Arrow", "Shape to display the pose as.",
+  shape_property_ = new rviz_common::properties::EnumProperty( "Shape", "Arrow", "Shape to display the pose as.",
                                       this, SLOT( updateShapeChoice() ));
   shape_property_->addOption( "Arrow", Arrow );
   shape_property_->addOption( "Axes", Axes );
@@ -70,9 +72,7 @@ PoseArrayDisplay::~PoseArrayDisplay()
 
 void PoseArrayDisplay::onInitialize()
 {
-#if ROS_VERSION_MINIMUM(1,12,0)
-  ROS_WARN("jsk_rviz_plugins/PoseArrayDisplay is deprecated. Please use rviz default PoseArrayDisplay plugin instead.");
-#endif
+  RVIZ_COMMON_LOG_WARNING("jsk_rviz_plugins/PoseArrayDisplay is deprecated. Please use rviz default PoseArrayDisplay plugin instead.");
   MFDClass::onInitialize();
   manual_object_ = scene_manager_->createManualObject();
   manual_object_->setDynamic( true );
@@ -104,13 +104,13 @@ void PoseArrayDisplay::updateShapeVisibility()
   if( !pose_valid_ )
   {
     manual_object_->setVisible(false);
-    for (int i = 0; i < coords_nodes_.size() ; i++)
+    for (size_t i = 0; i < coords_nodes_.size() ; i++)
       coords_nodes_[i]->setVisible(false);
   }
   else
   {
     bool use_arrow = (shape_property_->getOptionInt() == Arrow);
-    for (int i = 0; i < coords_nodes_.size() ; i++)
+    for (size_t i = 0; i < coords_nodes_.size() ; i++)
       coords_nodes_[i]->setVisible(!use_arrow);
 
     manual_object_->setVisible(use_arrow);
@@ -127,17 +127,17 @@ void PoseArrayDisplay::updateAxisGeometry()
 
 void PoseArrayDisplay::allocateCoords(int num)
 {
-  if (num > coords_objects_.size()) {
-    for (size_t i = coords_objects_.size(); i < num; i++) {
+  if (num > static_cast<int>(coords_objects_.size())) {
+    for (size_t i = coords_objects_.size(); i < static_cast<size_t>(num); i++) {
       Ogre::SceneNode* scene_node = scene_node_->createChildSceneNode();
-      rviz::Axes* axes = new rviz::Axes( scene_manager_, scene_node,
+      rviz_rendering::Axes* axes = new rviz_rendering::Axes( scene_manager_, scene_node,
                                         axes_length_property_->getFloat(),
                                         axes_radius_property_->getFloat());
       coords_nodes_.push_back(scene_node);
       coords_objects_.push_back(axes);
     }
   }
-  else if (num < coords_objects_.size()) {
+  else if (num < static_cast<int>(coords_objects_.size())) {
     for (int i = coords_objects_.size() - 1; num <= i; i--) {
       delete coords_objects_[i];
       scene_manager_->destroySceneNode(coords_nodes_[i]);
@@ -148,19 +148,16 @@ void PoseArrayDisplay::allocateCoords(int num)
 }
 
 
-bool validateFloats( const geometry_msgs::PoseArray& msg )
+bool validateFloats( const geometry_msgs::msg::PoseArray& msg )
 {
-  return rviz::validateFloats( msg.poses );
+  return rviz_common::validateFloats( msg.poses );
 }
 
-void PoseArrayDisplay::processMessage( const geometry_msgs::PoseArray::ConstPtr& msg )
+void PoseArrayDisplay::processMessage( geometry_msgs::msg::PoseArray::ConstSharedPtr msg )
 {
-#if ROS_VERSION_MINIMUM(1,12,0)
-  ROS_WARN_THROTTLE(1.0, "jsk_rviz_plugins/PoseArrayDisplay is deprecated. Please use rviz default PoseArrayDisplay plugin instead.");
-#endif
   if( !validateFloats( *msg ))
   {
-    setStatus( rviz::StatusProperty::Error, "Topic", "Message contained invalid floating point values (nans or infs)" );
+    setStatus( rviz_common::properties::StatusProperty::Error, "Topic", "Message contained invalid floating point values (nans or infs)" );
     return;
   }
 
@@ -170,7 +167,8 @@ void PoseArrayDisplay::processMessage( const geometry_msgs::PoseArray::ConstPtr&
   Ogre::Quaternion orientation;
   if( !context_->getFrameManager()->getTransform( msg->header, position, orientation ))
   {
-    ROS_DEBUG( "Error transforming from frame '%s' to frame '%s'", msg->header.frame_id.c_str(), qPrintable( fixed_frame_ ));
+    RVIZ_COMMON_LOG_DEBUG_STREAM( "Error transforming from frame '" << msg->header.frame_id
+                                  << "' to frame '" << qPrintable( fixed_frame_ ) << "'" );
   }
 
   pose_valid_ = true;
@@ -182,7 +180,7 @@ void PoseArrayDisplay::processMessage( const geometry_msgs::PoseArray::ConstPtr&
   manual_object_->clear();
 
   if(shape_property_->getOptionInt() == Arrow ) {
-    for (int i = 0; i < coords_nodes_.size() ; i++)
+    for (size_t i = 0; i < coords_nodes_.size() ; i++)
       coords_nodes_[i]->setVisible(false);
     Ogre::ColourValue color = color_property_->getOgreColor();
     float length = length_property_->getFloat();
@@ -209,9 +207,9 @@ void PoseArrayDisplay::processMessage( const geometry_msgs::PoseArray::ConstPtr&
         vertices[4] = vertices[ 1 ];
         vertices[5] = pos + orient * Ogre::Vector3( 0.75*length, -0.2*length, 0 );
 
-        for( int i = 0; i < 6; ++i )
+        for( int j = 0; j < 6; ++j )
           {
-            manual_object_->position( vertices[i] );
+            manual_object_->position( vertices[j] );
             manual_object_->colour( color );
           }
       }
@@ -219,20 +217,19 @@ void PoseArrayDisplay::processMessage( const geometry_msgs::PoseArray::ConstPtr&
   }
   else{
     allocateCoords(msg->poses.size());
-    for (int i = 0; i < msg->poses.size() ; i++){
-      geometry_msgs::Pose pose = msg->poses[i];
+    for (size_t i = 0; i < msg->poses.size() ; i++){
       Ogre::SceneNode* scene_node = coords_nodes_[i];
       scene_node->setVisible(true);
 
-      Ogre::Vector3 position( msg->poses[i].position.x,
-                              msg->poses[i].position.y,
-                              msg->poses[i].position.z );
-      Ogre::Quaternion orientation( msg->poses[i].orientation.w,
-                                    msg->poses[i].orientation.x,
-                                    msg->poses[i].orientation.y,
-                                    msg->poses[i].orientation.z );
-      scene_node->setPosition(position);
-      scene_node->setOrientation(orientation); // scene node is at frame pose
+      Ogre::Vector3 pos( msg->poses[i].position.x,
+                         msg->poses[i].position.y,
+                         msg->poses[i].position.z );
+      Ogre::Quaternion orient( msg->poses[i].orientation.w,
+                               msg->poses[i].orientation.x,
+                               msg->poses[i].orientation.y,
+                               msg->poses[i].orientation.z );
+      scene_node->setPosition(pos);
+      scene_node->setOrientation(orient); // scene node is at frame pose
     }
   }
 
@@ -249,10 +246,10 @@ void PoseArrayDisplay::reset()
   if ( coords_objects_.size() > 0 ) {
     allocateCoords(0);
   }
-  
+
 }
 
-} // namespace rviz
+} // namespace jsk_rviz_plugins
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::PoseArrayDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::PoseArrayDisplay, rviz_common::Display )

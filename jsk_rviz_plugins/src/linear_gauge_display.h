@@ -35,25 +35,25 @@
 #ifndef JSK_RVIZ_PLUGIN_LINEAR_GAUGE_H_
 #define JSK_RVIZ_PLUGIN_LINEAR_GAUGE_H_
 
-#include "std_msgs/Float32.h"
+#include <std_msgs/msg/float32.hpp>
 #ifndef Q_MOC_RUN
-#include <rviz/display.h>
+#include <rviz_common/ros_topic_display.hpp>
 #include "overlay_utils.h"
-#include <OGRE/OgreColourValue.h>
-#include <OGRE/OgreTexture.h>
-#include <OGRE/OgreMaterial.h>
-#include <rviz/properties/int_property.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/properties/color_property.h>
-#include <rviz/properties/bool_property.h>
-#include <rviz/properties/ros_topic_property.h>
+#include <OgreColourValue.h>
+#include <OgreTexture.h>
+#include <OgreMaterial.h>
+#include <rviz_common/properties/int_property.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/color_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <mutex>
 #endif
 
 namespace jsk_rviz_plugins
 {
 
   class LinearGaugeDisplay
-    : public rviz::Display
+    : public rviz_common::RosTopicDisplay<std_msgs::msg::Float32>
   {
     Q_OBJECT
   public:
@@ -69,44 +69,41 @@ namespace jsk_rviz_plugins
     ////////////////////////////////////////////////////////
     // methods
     ////////////////////////////////////////////////////////
-    virtual void update(float wall_dt, float ros_dt);
-    virtual void subscribe();
-    virtual void unsubscribe();
-    virtual void onEnable();
-    virtual void onDisable();
-    virtual void onInitialize();
-    virtual void processMessage(const std_msgs::Float32::ConstPtr& msg);
+    void update(float wall_dt, float ros_dt) override;
+    void onEnable() override;
+    void onDisable() override;
+    void onInitialize() override;
+    void processMessage(std_msgs::msg::Float32::ConstSharedPtr msg) override;
     virtual void drawPlot();
     ////////////////////////////////////////////////////////
     // properties
     ////////////////////////////////////////////////////////
-    rviz::RosTopicProperty* update_topic_property_;
-    rviz::BoolProperty* show_value_property_;
-    rviz::BoolProperty* vertical_gauge_property_;
-    rviz::ColorProperty* fg_color_property_;
-    rviz::ColorProperty* bg_color_property_;
-    rviz::FloatProperty* fg_alpha_property_;
-    rviz::FloatProperty* bg_alpha_property_;
-    rviz::FloatProperty* update_interval_property_;
-    rviz::BoolProperty* show_border_property_;
-    rviz::IntProperty* buffer_length_property_;
-    rviz::IntProperty* width_property_;
-    rviz::IntProperty* height_property_;
-    rviz::IntProperty* left_property_;
-    rviz::IntProperty* top_property_;
-    rviz::IntProperty* line_width_property_;
-    rviz::BoolProperty* auto_color_change_property_;
-    rviz::ColorProperty* max_color_property_;
-    rviz::BoolProperty* show_caption_property_;
-    rviz::IntProperty* text_size_property_;
-    rviz::FloatProperty* max_value_property_;
-    rviz::FloatProperty* min_value_property_;
-    
+    rviz_common::properties::BoolProperty* show_value_property_;
+    rviz_common::properties::BoolProperty* vertical_gauge_property_;
+    rviz_common::properties::ColorProperty* fg_color_property_;
+    rviz_common::properties::ColorProperty* bg_color_property_;
+    rviz_common::properties::FloatProperty* fg_alpha_property_;
+    rviz_common::properties::FloatProperty* bg_alpha_property_;
+    rviz_common::properties::FloatProperty* update_interval_property_;
+    rviz_common::properties::BoolProperty* show_border_property_;
+    rviz_common::properties::IntProperty* buffer_length_property_;
+    rviz_common::properties::IntProperty* width_property_;
+    rviz_common::properties::IntProperty* height_property_;
+    rviz_common::properties::IntProperty* left_property_;
+    rviz_common::properties::IntProperty* top_property_;
+    rviz_common::properties::IntProperty* line_width_property_;
+    rviz_common::properties::BoolProperty* auto_color_change_property_;
+    rviz_common::properties::ColorProperty* max_color_property_;
+    rviz_common::properties::BoolProperty* show_caption_property_;
+    rviz_common::properties::IntProperty* text_size_property_;
+    rviz_common::properties::FloatProperty* max_value_property_;
+    rviz_common::properties::FloatProperty* min_value_property_;
+
     OverlayObject::Ptr overlay_;
     QColor fg_color_;
     QColor max_color_;
     QColor bg_color_;
-   
+
     double fg_alpha_;
     double bg_alpha_;
     bool show_border_;
@@ -117,7 +114,7 @@ namespace jsk_rviz_plugins
     bool draw_required_;
     float last_time_;
     float update_interval_;
-    
+
     uint16_t texture_width_;
     uint16_t texture_height_;
     int left_;
@@ -133,15 +130,13 @@ namespace jsk_rviz_plugins
     float data_;
     bool first_time_;
 
-    
+
     ////////////////////////////////////////////////////////
     // ROS variables
     ////////////////////////////////////////////////////////
-    boost::mutex mutex_;
-    ros::Subscriber sub_;
-                        
+    std::mutex mutex_;
+
   protected Q_SLOTS:
-    void updateTopic();
     void updateShowValue();
     void updateVerticalGauge();
     void updateBGColor();

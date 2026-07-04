@@ -40,51 +40,48 @@ set(SOURCE_FILES
   src/overlay_utils.cpp
   src/overlay_text_display.cpp
   src/string_display.cpp
+  # Group B: 2D overlay family
+  src/overlay_menu_display.cpp
+  src/pie_chart_display.cpp
+  src/plotter_2d_display.cpp
+  src/linear_gauge_display.cpp
+  src/overlay_diagnostic_display.cpp
+  src/overlay_image_display.cpp
+  src/image_transport_hints_property.cpp
+  src/overlay_picker_tool.cpp
+  # Group C: 3D scene displays
+  src/facing_visualizer.cpp
+  src/target_visualizer_display.cpp
+  src/pictogram_display.cpp
+  src/pictogram_array_display.cpp
+  src/diagnostics_display.cpp
+  src/tf_trajectory_display.cpp
+  src/twist_stamped_display.cpp
+  src/pose_array_display.cpp
+  src/camera_info_display.cpp
+  src/normal_display.cpp
+  src/normal_visual.cpp
+  # Group D: tools and panels
+  src/close_all_tool.cpp
+  src/open_all_tool.cpp
+  src/screenshot_listener_tool.cpp
+  src/publish_topic.cpp
+  src/empty_service_call_interface.cpp
+  src/record_action.cpp
+  src/object_fit_operator.cpp
+  src/robot_command_interface.cpp
+  src/cancel_action.cpp
+  src/select_point_cloud_publish_action.cpp
 )
 
-# Group B: 2D overlay family
-# src/overlay_menu_display.cpp
-# src/pie_chart_display.cpp
-# src/plotter_2d_display.cpp
-# src/linear_gauge_display.cpp
-# src/overlay_diagnostic_display.cpp
-# src/overlay_image_display.cpp
-# src/image_transport_hints_property.cpp
-# src/overlay_picker_tool.cpp
-
-# Group C: 3D scene displays
-# src/facing_visualizer.cpp
-# src/target_visualizer_display.cpp
-# src/pictogram_display.cpp
-# src/pictogram_array_display.cpp
-# src/diagnostics_display.cpp
-# src/tf_trajectory_display.cpp
-# src/twist_stamped_display.cpp
-# src/pose_array_display.cpp
-# src/camera_info_display.cpp
-# src/normal_display.cpp
-# src/normal_visual.cpp
-
-# Group D: tools and panels
-# src/close_all_tool.cpp
-# src/open_all_tool.cpp
-# src/screenshot_listener_tool.cpp
-# src/publish_topic.cpp
-# src/empty_service_call_interface.cpp
-# src/record_action.cpp
-# src/object_fit_operator.cpp
-# src/robot_command_interface.cpp
-# src/cancel_action.cpp
-# src/select_point_cloud_publish_action.cpp
-
-# Group E: capture and rviz-internal displays
+# Group E: capture and rviz-internal displays (not yet ported)
 # src/rviz_scene_publisher.cpp
 # src/video_capture_display.cpp
 # src/quiet_interactive_marker_display.cpp
 # src/overlay_camera_display.cpp
 
 if(people_msgs_FOUND)
-  # list(APPEND SOURCE_FILES src/people_position_measurement_array_display.cpp)
+  list(APPEND SOURCE_FILES src/people_position_measurement_array_display.cpp)
 else()
   message(WARNING "people_msgs not found: skipping PeoplePositionMeasurementArray display")
 endif()

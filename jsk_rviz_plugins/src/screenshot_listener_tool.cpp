@@ -33,20 +33,20 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <ros/ros.h>
-#include <rviz/tool_manager.h>
-#include <rviz/display_context.h>
-#include <rviz/view_manager.h>
-#include <rviz/display_group.h>
-#include <rviz/display.h>
-#include <rviz/render_panel.h>
+#include <rviz_common/tool_manager.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/view_manager.hpp>
+#include <rviz_common/display_group.hpp>
+#include <rviz_common/display.hpp>
+#include <rviz_common/render_panel.hpp>
 #include <QImageWriter>
+#include <QPixmap>
 #include "screenshot_listener_tool.h"
 
 namespace jsk_rviz_plugins
 {
   ScreenshotListenerTool::ScreenshotListenerTool()
-    : rviz::Tool()
+    : rviz_common::Tool()
   {
 
   }
@@ -57,28 +57,35 @@ namespace jsk_rviz_plugins
 
   void ScreenshotListenerTool::onInitialize()
   {
-    ros::NodeHandle nh;
-    screenshot_service_ = nh.advertiseService(
+    rclcpp::Node::SharedPtr node =
+      context_->getRosNodeAbstraction().lock()->get_raw_node();
+    screenshot_service_ = node->create_service<jsk_rviz_plugins_msgs::srv::Screenshot>(
       "/rviz/screenshot",
-      &ScreenshotListenerTool::takeScreenShot, this);
+      [this](jsk_rviz_plugins_msgs::srv::Screenshot::Request::SharedPtr req,
+             jsk_rviz_plugins_msgs::srv::Screenshot::Response::SharedPtr res)
+      {
+        takeScreenShot(req, res);
+      });
   }
-  
+
   void ScreenshotListenerTool::activate()
   {
-    
+
   }
 
   void ScreenshotListenerTool::deactivate()
   {
-   
+
   }
 
   bool ScreenshotListenerTool::takeScreenShot(
-    jsk_rviz_plugins::Screenshot::Request& req,
-    jsk_rviz_plugins::Screenshot::Response& res)
+    jsk_rviz_plugins_msgs::srv::Screenshot::Request::SharedPtr req,
+    jsk_rviz_plugins_msgs::srv::Screenshot::Response::SharedPtr res)
   {
-    QPixmap screenshot = QPixmap::grabWindow(context_->getViewManager()->getRenderPanel()->winId());
-    QString output_file = QString::fromStdString(req.file_name);
+    (void)res;
+    rviz_common::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
+    QPixmap screenshot = panel->grab();
+    QString output_file = QString::fromStdString(req->file_name);
     QImageWriter writer(output_file);
     writer.write(screenshot.toImage());
     return true;
@@ -86,5 +93,5 @@ namespace jsk_rviz_plugins
 
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::ScreenshotListenerTool, rviz::Tool )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::ScreenshotListenerTool, rviz_common::Tool )

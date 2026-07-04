@@ -1,61 +1,78 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Author: Yuki Furuta <me@furushchev.ru>
 
 
-import rospy
-from jsk_rviz_plugins.msg import OverlayMenu
+from jsk_rviz_plugins_msgs.msg import OverlayMenu
+import rclpy
+from rclpy.node import Node
+
+OVERLAY_MENU_TYPE = 'jsk_rviz_plugins_msgs/msg/OverlayMenu'
 
 
-class OverlayMenuBridge(object):
+class OverlayMenuBridge(Node):
     def __init__(self):
-        super(OverlayMenuBridge, self).__init__()
+        super(OverlayMenuBridge, self).__init__('overlay_menu_bridge')
 
-        if OverlayMenu._md5sum == 'fed3c7e9788f7ee37908107a2597b619':
-            rospy.logwarn('This script is not necessary since md5sum of OverlayMenu is the same as old one.')
+        # NOTE(ros2): md5sum based check of the old OverlayMenu definition
+        # does not exist in ROS 2.
 
-        self.queue_size = rospy.get_param('~queue_size', 10)
-        self.remap_suffix = rospy.get_param('~remap_suffix', 'kinetic')
-        self.publishers = {}
-        self.subscribers = {}
+        self.queue_size = self.declare_parameter('queue_size', 10).value
+        self.remap_suffix = self.declare_parameter(
+            'remap_suffix', 'kinetic').value
+        self.publishers_ = {}
+        self.subscribers_ = {}
 
-        poll_rate = rospy.get_param('~poll_rate', 1.0)
-        self.poll_timer = rospy.Timer(rospy.Duration(1.0 / poll_rate), self.timerCallback)
+        poll_rate = self.declare_parameter('poll_rate', 1.0).value
+        self.poll_timer = self.create_timer(
+            1.0 / poll_rate, self.timerCallback)
 
     def remap(self, topic):
         return topic + '/' + self.remap_suffix
 
     def messageCallback(self, msg, topic):
         try:
-            self.publishers[self.remap(topic)].publish(msg)
+            self.publishers_[self.remap(topic)].publish(msg)
         except Exception as exc:
-            rospy.logerr('Error on publishing to {}: {}'.format(topic, exc))
+            self.get_logger().error(
+                'Error on publishing to {}: {}'.format(topic, exc))
 
-    def timerCallback(self, event):
-        topics = [i[0] for i in rospy.get_published_topics() if i[1] == OverlayMenu._type]
-        subscribed_topics = self.subscribers.keys()
-        managed_topics = subscribed_topics + self.publishers.keys()
+    def timerCallback(self):
+        topics = [name for name, types in self.get_topic_names_and_types()
+                  if OVERLAY_MENU_TYPE in types]
+        subscribed_topics = list(self.subscribers_.keys())
+        managed_topics = subscribed_topics + list(self.publishers_.keys())
         for topic in topics:
             if topic not in managed_topics:
-                self.publishers[self.remap(topic)] = rospy.Publisher(
-                    self.remap(topic), OverlayMenu, queue_size=self.queue_size)
-                self.subscribers[topic] = rospy.Subscriber(
-                    topic, rospy.AnyMsg, self.messageCallback, topic,
-                    queue_size=self.queue_size)
+                self.publishers_[self.remap(topic)] = self.create_publisher(
+                    OverlayMenu, self.remap(topic), self.queue_size)
+                self.subscribers_[topic] = self.create_subscription(
+                    OverlayMenu, topic,
+                    lambda msg, topic=topic: self.messageCallback(msg, topic),
+                    self.queue_size)
 
-                rospy.loginfo('Remapped {} -> {}'.format(topic, self.remap(topic)))
+                self.get_logger().info(
+                    'Remapped {} -> {}'.format(topic, self.remap(topic)))
 
         for topic in subscribed_topics:
             if topic not in topics:
-                sub = self.subscribers.pop(topic)
-                sub.unregister()
-                pub = self.publishers.pop(self.remap(topic))
-                pub.unregister()
+                sub = self.subscribers_.pop(topic)
+                self.destroy_subscription(sub)
+                pub = self.publishers_.pop(self.remap(topic))
+                self.destroy_publisher(pub)
 
-                rospy.loginfo('Stopped Remap {} -> {}'.format(topic, self.remap(topic)))
+                self.get_logger().info(
+                    'Stopped Remap {} -> {}'.format(
+                        topic, self.remap(topic)))
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    b = OverlayMenuBridge()
+    rclpy.spin(b)
+    b.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
-    rospy.init_node('overlay_menu_bridge')
-    b = OverlayMenuBridge()
-    rospy.spin()
+    main()

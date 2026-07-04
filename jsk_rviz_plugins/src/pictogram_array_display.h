@@ -38,8 +38,9 @@
 #define JSK_RVIZ_PLUGINS_PICTOGRAM_ARRAY_DISPLAY_H_
 
 #ifndef Q_MOC_RUN
+#include <mutex>
 #include "pictogram_display.h"
-#include <jsk_rviz_plugins/PictogramArray.h>
+#include <jsk_rviz_plugins_msgs/msg/pictogram_array.hpp>
 #endif
 namespace jsk_rviz_plugins
 {
@@ -47,7 +48,7 @@ namespace jsk_rviz_plugins
   // Display to visualize pictogram on rviz
   ////////////////////////////////////////////////////////
   class PictogramArrayDisplay:
-    public rviz::MessageFilterDisplay<jsk_rviz_plugins::PictogramArray>
+    public rviz_common::MessageFilterDisplay<jsk_rviz_plugins_msgs::msg::PictogramArray>
   {
     Q_OBJECT
   public:
@@ -61,14 +62,14 @@ namespace jsk_rviz_plugins
     virtual void onInitialize();
     virtual void reset();
     virtual void onEnable();
-    void processMessage(const jsk_rviz_plugins::PictogramArray::ConstPtr& msg);
+    void processMessage(jsk_rviz_plugins_msgs::msg::PictogramArray::ConstSharedPtr msg) override;
     void update(float wall_dt, float ros_dt);
     void allocatePictograms(size_t num);
-    
+
     ////////////////////////////////////////////////////////
     // parameters
     ////////////////////////////////////////////////////////
-    boost::mutex mutex_;
+    std::mutex mutex_;
     std::vector<PictogramObject::Ptr> pictograms_;
   private Q_SLOTS:
     

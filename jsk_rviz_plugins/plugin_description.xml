@@ -16,7 +16,7 @@
     </description>
   </class>
 
-  <!-- Group B: 2D overlay family (enabled as ported)
+  <!-- Group B: 2D overlay family -->
   <class name="jsk_rviz_plugin/OverlayMenu"
          type="jsk_rviz_plugins::OverlayMenuDisplay"
          base_class_type="rviz_common::Display">
@@ -66,9 +66,8 @@
       Overlay picker by dragging
     </description>
   </class>
-  -->
 
-  <!-- Group C: 3D scene displays (enabled as ported)
+  <!-- Group C: 3D scene displays -->
   <class name="jsk_rviz_plugin/TargetVisualizer"
          type="jsk_rviz_plugins::TargetVisualizerDisplay"
          base_class_type="rviz_common::Display">
@@ -129,6 +128,8 @@
       Displays for sensor_msgs::PointCloud2 message
     </description>
   </class>
+  <!-- people_msgs is not released for ROS 2 Jazzy binaries; this display is
+       compiled only when people_msgs is found (see CMakeLists.txt).
   <class name="jsk_rviz_plugin/PeoplePositionMeasurementArray"
          type="jsk_rviz_plugins::PeoplePositionMeasurementArrayDisplay"
          base_class_type="rviz_common::Display">
@@ -138,7 +139,7 @@
   </class>
   -->
 
-  <!-- Group D: tools and panels (enabled as ported)
+  <!-- Group D: tools and panels -->
   <class name="jsk_rviz_plugin/CloseAll"
          type="jsk_rviz_plugins::CloseAllTool"
          base_class_type="rviz_common::Tool">
@@ -209,7 +210,6 @@
       A panel widget to EmptyServiceCallInterfaceAction action
     </description>
   </class>
-  -->
 
   <!-- Group E: capture and rviz-internal displays (enabled as ported)
   <class name="jsk_rviz_plugin/RvizScenePublisher"

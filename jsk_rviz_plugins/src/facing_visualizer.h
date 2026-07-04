@@ -37,16 +37,17 @@
 #ifndef JSK_RVIZ_PLUGIN_FACING_VISUALIZER_H_
 #define JSK_RVIZ_PLUGIN_FACING_VISUALIZER_H_
 
-#include <OGRE/OgreTexture.h>
-#include <OGRE/OgreSceneManager.h>
-#include <OGRE/OgreSceneNode.h>
-#include <OGRE/OgreTexture.h>
-#include <OGRE/OgreMaterial.h>
-#include <OGRE/OgreManualObject.h>
-#include <rviz/display_context.h>
-#include <ros/time.h>
-#include <rviz/ogre_helpers/billboard_line.h>
-#include <rviz/ogre_helpers/movable_text.h>
+#include <memory>
+#include <string>
+
+#include <OgreTexture.h>
+#include <OgreSceneManager.h>
+#include <OgreSceneNode.h>
+#include <OgreMaterial.h>
+#include <OgreManualObject.h>
+#include <rviz_common/display_context.hpp>
+#include <rviz_rendering/objects/billboard_line.hpp>
+#include <rviz_rendering/objects/movable_text.hpp>
 #include "overlay_utils.h"
 
 namespace jsk_rviz_plugins
@@ -57,11 +58,7 @@ namespace jsk_rviz_plugins
   class SquareObject
   {
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<SquareObject> Ptr;
-#else
-    typedef boost::shared_ptr<SquareObject> Ptr;
-#endif
     SquareObject(Ogre::SceneManager* manager,
                  double outer_radius,
                  double inner_radius,
@@ -90,11 +87,7 @@ namespace jsk_rviz_plugins
   class TextureObject           // utility class for texture
   {
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<TextureObject> Ptr;
-#else
-    typedef boost::shared_ptr<TextureObject> Ptr;
-#endif
     TextureObject(const int width, const int height, const std::string name);
     virtual ~TextureObject();
     virtual int getWidth() { return width_; };
@@ -114,17 +107,13 @@ namespace jsk_rviz_plugins
   class FacingObject
   {
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<FacingObject> Ptr;
-#else
-    typedef boost::shared_ptr<FacingObject> Ptr;
-#endif
     FacingObject(Ogre::SceneManager* manager,
                  Ogre::SceneNode* parent,
                  double size);
     virtual ~FacingObject();
     virtual void setPosition(Ogre::Vector3& pos);
-    virtual void setOrientation(rviz::DisplayContext* context);
+    virtual void setOrientation(rviz_common::DisplayContext* context);
     virtual void setOrientation(Ogre::Quaternion& rot); // non facing API
     virtual void update(float wall_dt, float ros_dt) = 0;
     virtual void setSize(double size);
@@ -149,14 +138,10 @@ namespace jsk_rviz_plugins
   class SimpleCircleFacingVisualizer: public FacingObject
   {
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<SimpleCircleFacingVisualizer> Ptr;
-#else
-    typedef boost::shared_ptr<SimpleCircleFacingVisualizer> Ptr;
-#endif
     SimpleCircleFacingVisualizer(Ogre::SceneManager* manager,
                                  Ogre::SceneNode* parent,
-                                 rviz::DisplayContext* context,
+                                 rviz_common::DisplayContext* context,
                                  double size,
                                  std::string text = "");
     virtual ~SimpleCircleFacingVisualizer();
@@ -168,13 +153,13 @@ namespace jsk_rviz_plugins
     virtual void setText(std::string text);
   protected:
     virtual void updateArrowsObjects(Ogre::ColourValue color);
-    virtual void createArrows(rviz::DisplayContext* context);
+    virtual void createArrows(rviz_common::DisplayContext* context);
     virtual void updateLine();
     virtual void updateTextUnderLine();
     virtual void updateText();
     virtual void updateColor();
-    rviz::BillboardLine* line_;
-    rviz::BillboardLine* text_under_line_;
+    rviz_rendering::BillboardLine* line_;
+    rviz_rendering::BillboardLine* text_under_line_;
     Ogre::ManualObject* upper_arrow_;
     Ogre::ManualObject* lower_arrow_;
     Ogre::ManualObject* left_arrow_;
@@ -191,7 +176,7 @@ namespace jsk_rviz_plugins
     std::string left_material_name_;
     std::string lower_material_name_;
     std::string right_material_name_;
-    rviz::MovableText* msg_;
+    rviz_rendering::MovableText* msg_;
     Ogre::SceneNode* target_text_node_;
   private:
     
@@ -200,11 +185,7 @@ namespace jsk_rviz_plugins
   class FacingTexturedObject: public FacingObject
   {
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<FacingTexturedObject> Ptr;
-#else
-    typedef boost::shared_ptr<FacingTexturedObject> Ptr;
-#endif
     FacingTexturedObject(Ogre::SceneManager* manager,
                          Ogre::SceneNode* parent,
                          double size);
@@ -220,11 +201,7 @@ namespace jsk_rviz_plugins
   class GISCircleVisualizer: public FacingTexturedObject
   {
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<GISCircleVisualizer> Ptr;
-#else
-    typedef boost::shared_ptr<GISCircleVisualizer> Ptr;
-#endif
     GISCircleVisualizer(Ogre::SceneManager* manager,
                         Ogre::SceneNode* parent,
                         double size,

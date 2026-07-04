@@ -1,10 +1,29 @@
 // -*- mode: C++ -*-
 #include "normal_display.h"
 
-using namespace rviz;
+#include <rviz_common/logging.hpp>
+
+using namespace rviz_common::properties;
 
 namespace jsk_rviz_plugins
 {
+
+  // Local helper ported from rviz/default_plugin/point_cloud_transformers.h
+  // (in ROS 2 it lives in rviz_default_plugins' point_cloud_helpers.hpp;
+  //  inlined here to avoid a dependency on rviz_default_plugins)
+  static inline int32_t findChannelIndex(
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud,
+    const std::string& channel)
+  {
+    for (size_t i = 0; i < cloud->fields.size(); ++i)
+      {
+        if (cloud->fields[i].name == channel)
+          {
+            return static_cast<int32_t>(i);
+          }
+      }
+    return -1;
+  }
 
   NormalDisplay::NormalDisplay():skip_rate_(1),scale_(0.3),alpha_(1.0)
   {
@@ -16,16 +35,16 @@ namespace jsk_rviz_plugins
     skip_rate_property_->setMin(  0.0);
 
     scale_property_
-      = new rviz::FloatProperty("Scale", 0.3,
-                                "set the scale of arrow",
-                                this, SLOT(updateScale()));
+      = new FloatProperty("Scale", 0.3,
+                          "set the scale of arrow",
+                          this, SLOT(updateScale()));
 
     scale_property_->setMin(0.0);
 
     alpha_property_
-      = new rviz::FloatProperty("Alpha", 1,
-                                "set the alpha of arrow",
-                                this, SLOT(updateAlpha()));
+      = new FloatProperty("Alpha", 1,
+                          "set the alpha of arrow",
+                          this, SLOT(updateAlpha()));
 
     alpha_property_->setMax(1.0);
     alpha_property_->setMin(0.0);
@@ -140,7 +159,7 @@ namespace jsk_rviz_plugins
   }
 
 
-  void NormalDisplay::processMessage( const sensor_msgs::PointCloud2::ConstPtr& msg )
+  void NormalDisplay::processMessage( sensor_msgs::msg::PointCloud2::ConstSharedPtr msg )
   {
     //check x,y,z
     int32_t xi = findChannelIndex(msg, "x");
@@ -149,7 +168,7 @@ namespace jsk_rviz_plugins
 
     if (xi == -1 || yi == -1 || zi == -1)
       {
-        ROS_ERROR("doesn't have x, y, z");
+        RVIZ_COMMON_LOG_ERROR("doesn't have x, y, z");
         return;
       }
 
@@ -165,7 +184,7 @@ namespace jsk_rviz_plugins
 
     if (normal_xi == -1 || normal_yi == -1 || normal_zi == -1 || curvature_i == -1)
       {
-        ROS_ERROR("doesn't have normal_x, normal_y, normal_z, curvature");
+        RVIZ_COMMON_LOG_ERROR("doesn't have normal_x, normal_y, normal_z, curvature");
         return;
       }
 
@@ -186,18 +205,18 @@ namespace jsk_rviz_plugins
 
     if (point_count == 0)
       {
-        ROS_ERROR("doesn't have point_count > 0");
+        RVIZ_COMMON_LOG_ERROR("doesn't have point_count > 0");
         return;
       }
 
     Ogre::Quaternion orientation;
     Ogre::Vector3 position;
-    if( !context_->getFrameManager()->getTransform( msg->header.frame_id,
-                                                    msg->header.stamp,
+    if( !context_->getFrameManager()->getTransform( msg->header,
                                                     position, orientation ))
       {
-        ROS_DEBUG( "Error transforming from frame '%s' to frame '%s'",
-                   msg->header.frame_id.c_str(), qPrintable( fixed_frame_ ));
+        RVIZ_COMMON_LOG_DEBUG_STREAM( "Error transforming from frame '"
+                                      << msg->header.frame_id << "' to frame '"
+                                      << qPrintable( fixed_frame_ ) << "'");
         return;
       }
 
@@ -230,13 +249,9 @@ namespace jsk_rviz_plugins
         float curvature = *reinterpret_cast<const float*>(ptr + curvature_off);
         int r=1,g=0,b=0;
 
-        if (validateFloats(Ogre::Vector3(x, y, z)) && validateFloats(Ogre::Vector3(normal_x, normal_y, normal_z)))
+        if (rviz_common::validateFloats(Ogre::Vector3(x, y, z)) && rviz_common::validateFloats(Ogre::Vector3(normal_x, normal_y, normal_z)))
           {
-#if ROS_VERSION_MINIMUM(1,12,0)
             std::shared_ptr<NormalVisual> visual;
-#else
-            boost::shared_ptr<NormalVisual> visual;
-#endif
             if(visuals_.full()){
               visual = visuals_.front();
             }else{
@@ -300,5 +315,5 @@ namespace jsk_rviz_plugins
   }
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::NormalDisplay,rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::NormalDisplay, rviz_common::Display )

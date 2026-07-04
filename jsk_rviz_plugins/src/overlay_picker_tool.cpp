@@ -1,4 +1,4 @@
-// -*- mode: c++ -*-
+// -*- mode: c++; -*-
 /*********************************************************************
  * Software License Agreement (BSD License)
  *
@@ -34,14 +34,15 @@
  *********************************************************************/
 
 #include <QApplication>
+#include <QKeyEvent>
 #include <QMenu>
 #include <QTimer>
-#include <ros/ros.h>
-#include <rviz/tool_manager.h>
-#include <rviz/display_context.h>
-#include <rviz/view_manager.h>
-#include <rviz/display_group.h>
-#include <rviz/display.h>
+#include <rviz_common/tool_manager.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/view_manager.hpp>
+#include <rviz_common/display_group.hpp>
+#include <rviz_common/display.hpp>
+#include <rviz_common/logging.hpp>
 
 #include "overlay_picker_tool.h"
 #include "overlay_text_display.h"
@@ -50,16 +51,18 @@
 #include "overlay_image_display.h"
 #include "overlay_diagnostic_display.h"
 #include "overlay_menu_display.h"
+#include "string_display.h"
+#include "linear_gauge_display.h"
 
 namespace jsk_rviz_plugins
 {
   OverlayPickerTool::OverlayPickerTool()
-    : is_moving_(false), shift_pressing_(false), rviz::Tool()
+    : rviz_common::Tool(), is_moving_(false), shift_pressing_(false)
   {
 
   }
 
-  int OverlayPickerTool::processKeyEvent(QKeyEvent* event, rviz::RenderPanel* panel)
+  int OverlayPickerTool::processKeyEvent(QKeyEvent* event, rviz_common::RenderPanel* /*panel*/)
   {
     if (event->type() == QEvent::KeyPress && event->key() == Qt::Key_Shift) { // shift
       shift_pressing_ = true;
@@ -69,9 +72,9 @@ namespace jsk_rviz_plugins
     }
     return 0;
   }
-  
-  
-  int OverlayPickerTool::processMouseEvent(rviz::ViewportMouseEvent& event)
+
+
+  int OverlayPickerTool::processMouseEvent(rviz_common::ViewportMouseEvent& event)
   {
     if (event.left() && event.leftDown()) {
       if (!is_moving_) {
@@ -87,10 +90,10 @@ namespace jsk_rviz_plugins
     return 0;
   }
 
-  bool OverlayPickerTool::handleDisplayClick(rviz::Property* property, rviz::ViewportMouseEvent& event)
+  bool OverlayPickerTool::handleDisplayClick(rviz_common::properties::Property* property, rviz_common::ViewportMouseEvent& event)
   {
-    if (isPropertyType<rviz::DisplayGroup>(property)) {
-      rviz::DisplayGroup* group_property = isPropertyType<rviz::DisplayGroup>(property);
+    if (isPropertyType<rviz_common::DisplayGroup>(property)) {
+      rviz_common::DisplayGroup* group_property = isPropertyType<rviz_common::DisplayGroup>(property);
       for (int i = 0; i < group_property->numChildren(); i++) {
         if (handleDisplayClick(group_property->childAt(i), event)) {
           return true;
@@ -116,6 +119,12 @@ namespace jsk_rviz_plugins
       else if (startMovement<OverlayMenuDisplay>(property, event, "overlay_menu_display")) {
         return true;
       }
+      else if (startMovement<StringDisplay>(property, event, "string_display")) {
+        return true;
+      }
+      else if (startMovement<LinearGaugeDisplay>(property, event, "linear_gauge_display")) {
+        return true;
+      }
       else {
         return false;
       }
@@ -123,20 +132,16 @@ namespace jsk_rviz_plugins
     return false;
   }
 
-  void OverlayPickerTool::onClicked(rviz::ViewportMouseEvent& event)
+  void OverlayPickerTool::onClicked(rviz_common::ViewportMouseEvent& event)
   {
-    ROS_DEBUG("onClicked");
     is_moving_ = true;
-    ROS_DEBUG("clicked: (%d, %d)", event.x, event.y);
     // check the active overlay plugin
-    rviz::DisplayGroup* display_group = context_->getRootDisplayGroup();
+    rviz_common::DisplayGroup* display_group = context_->getRootDisplayGroup();
     handleDisplayClick(display_group, event);
   }
 
-  void OverlayPickerTool::onMove(rviz::ViewportMouseEvent& event)
+  void OverlayPickerTool::onMove(rviz_common::ViewportMouseEvent& event)
   {
-    ROS_DEBUG("onMove");
-    ROS_DEBUG("moving: (%d, %d)", event.x, event.y);
     if (target_property_) {
       if (target_property_type_ == "overlay_text_display") {
         movePosition<OverlayTextDisplay>(event);
@@ -156,14 +161,18 @@ namespace jsk_rviz_plugins
       else if (target_property_type_ == "overlay_menu_display") {
         movePosition<OverlayMenuDisplay>(event);
       }
+      else if (target_property_type_ == "string_display") {
+        movePosition<StringDisplay>(event);
+      }
+      else if (target_property_type_ == "linear_gauge_display") {
+        movePosition<LinearGaugeDisplay>(event);
+      }
     }
   }
-  
-  void OverlayPickerTool::onRelease(rviz::ViewportMouseEvent& event)
+
+  void OverlayPickerTool::onRelease(rviz_common::ViewportMouseEvent& event)
   {
-    ROS_DEBUG("onRelease");
     is_moving_ = false;
-    ROS_DEBUG("released: (%d, %d)", event.x, event.y);
     if (target_property_) {
       if (target_property_type_ == "overlay_text_display") {
         setPosition<OverlayTextDisplay>(event);
@@ -183,13 +192,19 @@ namespace jsk_rviz_plugins
       else if (target_property_type_ == "overlay_menu_display") {
         setPosition<OverlayMenuDisplay>(event);
       }
+      else if (target_property_type_ == "string_display") {
+        setPosition<StringDisplay>(event);
+      }
+      else if (target_property_type_ == "linear_gauge_display") {
+        setPosition<LinearGaugeDisplay>(event);
+      }
     }
     // clear cache
     target_property_ = NULL;
     target_property_type_ = "";
   }
-  
+
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::OverlayPickerTool, rviz::Tool )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::OverlayPickerTool, rviz_common::Tool )

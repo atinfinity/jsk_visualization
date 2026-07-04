@@ -34,11 +34,13 @@
  *********************************************************************/
 
 #include "facing_visualizer.h"
-#include <rviz/uniform_string_stream.h>
-#include <rviz/render_panel.h>
-#include <rviz/view_manager.h>
-#include <rviz/properties/parse_color.h>
+#include <rviz_common/uniform_string_stream.hpp>
+#include <rviz_common/render_panel.hpp>
+#include <rviz_common/view_manager.hpp>
+#include <rviz_common/view_controller.hpp>
+#include <rviz_common/properties/parse_color.hpp>
 #include <QPainter>
+#include <chrono>
 
 namespace jsk_rviz_plugins
 {
@@ -228,11 +230,11 @@ namespace jsk_rviz_plugins
     node_->setPosition(pos);
   }
   
-  void FacingObject::setOrientation(rviz::DisplayContext* context)
+  void FacingObject::setOrientation(rviz_common::DisplayContext* context)
   {
-    rviz::ViewManager* manager = context->getViewManager();
-    rviz::RenderPanel* panel = manager->getRenderPanel();
-    Ogre::Camera* camera = panel->getCamera();
+    rviz_common::ViewManager* manager = context->getViewManager();
+    rviz_common::ViewController* controller = manager->getCurrent();
+    Ogre::Camera* camera = controller->getCamera();
     Ogre::Quaternion q = camera->getDerivedOrientation();
     setOrientation(q);
   }
@@ -283,22 +285,22 @@ namespace jsk_rviz_plugins
   SimpleCircleFacingVisualizer::SimpleCircleFacingVisualizer(
     Ogre::SceneManager* manager,
     Ogre::SceneNode* parent,
-    rviz::DisplayContext* context,
+    rviz_common::DisplayContext* context,
     double size,
     std::string text):
     FacingObject(manager, parent, size)
   {
-    line_ = new rviz::BillboardLine(
+    line_ = new rviz_rendering::BillboardLine(
       context->getSceneManager(),
       node_);
-    text_under_line_ = new rviz::BillboardLine(
+    text_under_line_ = new rviz_rendering::BillboardLine(
       context->getSceneManager(),
       node_);
     target_text_node_ = node_->createChildSceneNode();
-    msg_ = new rviz::MovableText("not initialized", "Liberation Sans", 0.05);
+    msg_ = new rviz_rendering::MovableText("not initialized", "Liberation Sans", 0.05);
     msg_->setVisible(false);
-    msg_->setTextAlignment(rviz::MovableText::H_LEFT,
-                           rviz::MovableText::V_ABOVE);
+    msg_->setTextAlignment(rviz_rendering::MovableText::H_LEFT,
+                           rviz_rendering::MovableText::V_ABOVE);
     target_text_node_->attachObject(msg_);
     createArrows(context);
     updateLine();
@@ -326,9 +328,10 @@ namespace jsk_rviz_plugins
     Ogre::MaterialManager::getSingleton().remove(right_material_->getName());
   }
 
-  void SimpleCircleFacingVisualizer::update(float wall_dt, float ros_dt)
+  void SimpleCircleFacingVisualizer::update(float /*wall_dt*/, float /*ros_dt*/)
   {
-    double t_ = ros::WallTime::now().toSec();
+    double t_ = std::chrono::duration<double>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
     double t_rate
       = fmod(t_, arrow_animation_duration) / arrow_animation_duration;
     upper_arrow_node_->setPosition(0, (1.3 - 0.3 * t_rate) * size_, 0);
@@ -441,10 +444,10 @@ namespace jsk_rviz_plugins
   
   // allocate material and node for arrrows
   void SimpleCircleFacingVisualizer::createArrows(
-    rviz::DisplayContext* context)
+    rviz_common::DisplayContext* context)
   {
     static uint32_t count = 0;
-    rviz::UniformStringStream ss;
+    rviz_common::UniformStringStream ss;
     ss << "TargetVisualizerDisplayTriangle" << count++;
     ss << "Material";
     ss << "0";
@@ -508,7 +511,7 @@ namespace jsk_rviz_plugins
     line_->setLineWidth(0.1 * size_);
     line_->setNumLines(1);
     line_->setMaxPointsPerLine(1024);
-    for (size_t i = 0; i < resolution + 1; i++) {
+    for (size_t i = 0; i < static_cast<size_t>(resolution) + 1; i++) {
       double x = size_ * cos(i * 2 * M_PI / resolution);
       double y = size_ * sin(i * 2 * M_PI / resolution);
       double z = 0;
@@ -529,7 +532,7 @@ namespace jsk_rviz_plugins
                                 + size_ / 2.0,
                                 0);
     target_text_node_->setPosition(text_position);
-    Ogre::Vector3 msg_size = msg_->GetAABB().getSize();
+    Ogre::Vector3 msg_size = msg_->getBoundingBox().getSize();
     text_under_line_->clear();
     text_under_line_->setColor(color_.r, color_.g, color_.b, color_.a);
     
@@ -588,7 +591,7 @@ namespace jsk_rviz_plugins
                                              double size):
     FacingObject(manager, parent, size)
   {
-    rviz::UniformStringStream ss;
+    rviz_common::UniformStringStream ss;
     static int count = 0;
     ss << "FacingVisualizer" << count++;
     texture_object_.reset(new TextureObject(128, 128, ss.str()));
@@ -614,14 +617,15 @@ namespace jsk_rviz_plugins
 
   }
   
-  void GISCircleVisualizer::update(float wall_dt, float ros_dt)
+  void GISCircleVisualizer::update(float /*wall_dt*/, float /*ros_dt*/)
   {
-    ros::WallTime now = ros::WallTime::now();
+    double now = std::chrono::duration<double>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
     std::string text = text_ + " ";
     {
       ScopedPixelBuffer buffer = texture_object_->getBuffer();
       QColor transparent(0, 0, 0, 0);
-      QColor foreground = rviz::ogreToQt(color_);
+      QColor foreground = rviz_common::properties::ogreToQt(color_);
       QColor white(255, 255, 255, color_.a * 255);
       QImage Hud = buffer.getQImage(128, 128, transparent);
       double line_width = 5;
@@ -642,7 +646,7 @@ namespace jsk_rviz_plugins
       painter.setBrush(white);
       painter.drawEllipse(line_width / 2.0, line_width / 2.0,
                           l - line_width, l - line_width);
-      double offset_rate = fmod(now.toSec(), 10) / 10.0;
+      double offset_rate = fmod(now, 10) / 10.0;
       double theta_offset = offset_rate * M_PI * 2.0;
       for (size_t ci = 0; ci < text.length(); ci++) {
         double theta = M_PI * 2.0 / text.length() * ci + theta_offset;

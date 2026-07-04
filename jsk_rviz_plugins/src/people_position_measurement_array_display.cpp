@@ -34,31 +34,32 @@
  *********************************************************************/
 
 #include "people_position_measurement_array_display.h"
-#include <rviz/uniform_string_stream.h>
-#include <rviz/view_manager.h>
-#include <rviz/render_panel.h>
-#include <OGRE/OgreCamera.h>
+#include <rviz_common/uniform_string_stream.hpp>
+#include <rviz_common/view_manager.hpp>
+#include <rviz_common/render_panel.hpp>
+#include <rviz_common/logging.hpp>
+#include <OgreCamera.h>
 #include <QPainter>
-#include <rviz/ogre_helpers/render_system.h>
-#include <OGRE/OgreRenderSystem.h>
+#include <rviz_rendering/render_system.hpp>
+#include <OgreRenderSystem.h>
 
 #include <algorithm>
-#include <boost/lambda/lambda.hpp>
 
 namespace jsk_rviz_plugins
 {
   PeoplePositionMeasurementArrayDisplay::PeoplePositionMeasurementArrayDisplay()
   {
-    size_property_ = new rviz::FloatProperty("size", 0.3,
-                                             "size of the visualizer", this,
-                                             SLOT(updateSize()));
-    timeout_property_ = new rviz::FloatProperty(
+    size_property_ = new rviz_common::properties::FloatProperty(
+      "size", 0.3,
+      "size of the visualizer", this,
+      SLOT(updateSize()));
+    timeout_property_ = new rviz_common::properties::FloatProperty(
       "timeout", 10.0, "timeout seconds", this, SLOT(updateTimeout()));
-    anonymous_property_ = new rviz::BoolProperty(
+    anonymous_property_ = new rviz_common::properties::BoolProperty(
       "anonymous", false,
       "anonymous",
       this, SLOT(updateAnonymous()));
-    text_property_ = new rviz::StringProperty(
+    text_property_ = new rviz_common::properties::StringProperty(
       "text", "person found here person found here",
       "text to rotate",
       this, SLOT(updateText()));
@@ -93,9 +94,9 @@ namespace jsk_rviz_plugins
   }
 
   void PeoplePositionMeasurementArrayDisplay::processMessage(
-    const people_msgs::PositionMeasurementArray::ConstPtr& msg)
+    people_msgs::msg::PositionMeasurementArray::ConstSharedPtr msg)
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     static int count = 0;
     static int square_count = 0;
     faces_ = msg->people;
@@ -120,7 +121,7 @@ namespace jsk_rviz_plugins
     for (size_t i = 0; i < faces_.size(); i++) {
       Ogre::Quaternion orientation;
       Ogre::Vector3 position;
-      geometry_msgs::Pose pose;
+      geometry_msgs::msg::Pose pose;
       pose.position = faces_[i].pos;
       pose.orientation.w = 1.0;
       if(!context_->getFrameManager()->transform(msg->header,
@@ -131,25 +132,26 @@ namespace jsk_rviz_plugins
         oss << "Error transforming pose";
         oss << " from frame '" << msg->header.frame_id << "'";
         oss << " to frame '" << qPrintable(fixed_frame_) << "'";
-        ROS_ERROR_STREAM(oss.str());
-        setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+        RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+        setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
       }
       else {
         visualizers_[i]->setPosition(position);
       }
     }
-    latest_time_ = msg->header.stamp;
+    latest_time_ = rclcpp::Time(msg->header.stamp,
+                                context_->getClock()->get_clock_type());
   }
 
   void PeoplePositionMeasurementArrayDisplay::update(
     float wall_dt, float ros_dt)
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     if (faces_.size() == 0) {
       return;
     }
-    if ((ros::Time::now() - latest_time_).toSec() > timeout_) {
-      ROS_WARN("timeout face recognition result");
+    if ((context_->getClock()->now() - latest_time_).seconds() > timeout_) {
+      RVIZ_COMMON_LOG_WARNING("timeout face recognition result");
       clearObjects();
       return;
     }
@@ -163,20 +165,20 @@ namespace jsk_rviz_plugins
 
   void PeoplePositionMeasurementArrayDisplay::updateTimeout()
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     timeout_ = timeout_property_->getFloat();
   }
   
   void PeoplePositionMeasurementArrayDisplay::updateSize()
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     size_ = size_property_->getFloat();
     visualizers_.clear();
   }
 
   void PeoplePositionMeasurementArrayDisplay::updateAnonymous()
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     anonymous_ = anonymous_property_->getBool();
     for (size_t i = 0; i < visualizers_.size(); i++) {
       visualizers_[i]->setAnonymous(anonymous_);
@@ -185,7 +187,7 @@ namespace jsk_rviz_plugins
 
   void PeoplePositionMeasurementArrayDisplay::updateText()
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     text_ = text_property_->getStdString();
     for (size_t i = 0; i < visualizers_.size(); i++) {
       visualizers_[i]->setText(text_);
@@ -195,6 +197,6 @@ namespace jsk_rviz_plugins
 }
 
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::PeoplePositionMeasurementArrayDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::PeoplePositionMeasurementArrayDisplay, rviz_common::Display )
 

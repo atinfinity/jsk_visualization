@@ -1,16 +1,30 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # it depends on jsk_rviz_plugins
 
-import rospy
-from jsk_rviz_plugins.msg import OverlayText
 from jsk_rviz_plugins.overlay_text_interface import OverlayTextInterface
-def publish_text(event):
-    text_interface.publish(str(text))
+import rclpy
+from rclpy.node import Node
+
+
+class StaticOverlayText(Node):
+    def __init__(self):
+        super(StaticOverlayText, self).__init__('static_overlay_text')
+        self.text = self.declare_parameter('text', '').value
+        self.text_interface = OverlayTextInterface(self, '~/output')
+        self.timer = self.create_timer(0.1, self.publish_text)
+
+    def publish_text(self):
+        self.text_interface.publish(str(self.text))
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = StaticOverlayText()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
 
 if __name__ == "__main__":
-    rospy.init_node("static_overlay_text")
-    text = rospy.get_param("~text")
-    text_interface = OverlayTextInterface("~output")
-    rospy.Timer(rospy.Duration(0.1), publish_text)
-    rospy.spin()
+    main()

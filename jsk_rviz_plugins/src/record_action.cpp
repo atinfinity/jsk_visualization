@@ -5,13 +5,15 @@
 #include <QHBoxLayout>
 #include <QLabel>
 
+#include <rviz_common/display_context.hpp>
+
 #include "record_action.h"
 
 namespace jsk_rviz_plugins
 {
 
   RecordAction::RecordAction( QWidget* parent )
-    : rviz::Panel( parent )
+    : rviz_common::Panel( parent )
   {
     layout = new QVBoxLayout;
 
@@ -34,18 +36,23 @@ namespace jsk_rviz_plugins
 
     setLayout( layout );
     connect( record_interface_button_, SIGNAL( clicked() ), this, SLOT( recordClick() ));
-    pub_ = nh_.advertise<jsk_rviz_plugins::RecordCommand>( "/record_command", 1 );
     rstate_ = IDLE;
+  }
+
+  void RecordAction::onInitialize()
+  {
+    nh_ = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
+    pub_ = nh_->create_publisher<jsk_rviz_plugins_msgs::msg::RecordCommand>( "/record_command", 1 );
   }
 
   void RecordAction::OnClickPlayButton(int id){
     std::vector<motionListLayout>::iterator it = motion_list_layouts_.begin();
     while( it != motion_list_layouts_.end()){
       if(it->id == id){
-        jsk_rviz_plugins::RecordCommand msg;
+        jsk_rviz_plugins_msgs::msg::RecordCommand msg;
         msg.target = (it->target_name_)->text().toStdString();
-        msg.command = jsk_rviz_plugins::RecordCommand::PLAY;
-        pub_.publish(msg);
+        msg.command = jsk_rviz_plugins_msgs::msg::RecordCommand::ACTION_PLAY;
+        pub_->publish(msg);
         break;
       }
       ++it;
@@ -85,10 +92,10 @@ namespace jsk_rviz_plugins
 
   void RecordAction::addTopicList(std::string topic_name){
     if(rstate_ == IDLE){
-      jsk_rviz_plugins::RecordCommand msg;
+      jsk_rviz_plugins_msgs::msg::RecordCommand msg;
       msg.target = topic_name;
-      msg.command = jsk_rviz_plugins::RecordCommand::RECORD;
-      pub_.publish(msg);
+      msg.command = jsk_rviz_plugins_msgs::msg::RecordCommand::ACTION_RECORD;
+      pub_->publish(msg);
       rstate_ = RECORD;
       record_interface_button_->setText(QString("Stop"));
       record_motion_name_editor_->setDisabled(true);
@@ -96,10 +103,10 @@ namespace jsk_rviz_plugins
       record_interface_button_->setText(QString("Record"));
       record_motion_name_editor_->setDisabled(false);
 
-      jsk_rviz_plugins::RecordCommand msg;
+      jsk_rviz_plugins_msgs::msg::RecordCommand msg;
       msg.target = topic_name;
-      msg.command = jsk_rviz_plugins::RecordCommand::RECORD_STOP;
-      pub_.publish(msg);
+      msg.command = jsk_rviz_plugins_msgs::msg::RecordCommand::ACTION_RECORD_STOP;
+      pub_->publish(msg);
       rstate_ = IDLE;
 
       motionListLayout tll;
@@ -129,17 +136,17 @@ namespace jsk_rviz_plugins
     }
   }
 
-  void RecordAction::save( rviz::Config config ) const
+  void RecordAction::save( rviz_common::Config config ) const
   {
-    rviz::Panel::save( config );
+    rviz_common::Panel::save( config );
   }
 
-  void RecordAction::load( const rviz::Config& config )
+  void RecordAction::load( const rviz_common::Config& config )
   {
-    rviz::Panel::load( config );
+    rviz_common::Panel::load( config );
   }
 
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::RecordAction, rviz::Panel )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::RecordAction, rviz_common::Panel )

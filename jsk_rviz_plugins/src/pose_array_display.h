@@ -30,27 +30,34 @@
 #ifndef RVIZ_POSE_ARRAY_DISPLAY_H_
 #define RVIZ_POSE_ARRAY_DISPLAY_H_
 
-#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/msg/pose_array.hpp>
 
-#include "rviz/message_filter_display.h"
+#include <rviz_common/message_filter_display.hpp>
 
 namespace Ogre
 {
 class ManualObject;
 };
 
-namespace rviz
+namespace rviz_common
+{
+namespace properties
 {
 class ColorProperty;
 class FloatProperty;
 class EnumProperty;
+}
+};
+
+namespace rviz_rendering
+{
 class Axes;
 };
 
 namespace jsk_rviz_plugins
 {
 /** @brief Displays a geometry_msgs/PoseArray message as a bunch of line-drawn arrows. */
-  class PoseArrayDisplay: public rviz::MessageFilterDisplay<geometry_msgs::PoseArray>
+  class PoseArrayDisplay: public rviz_common::MessageFilterDisplay<geometry_msgs::msg::PoseArray>
 {
 Q_OBJECT
 public:
@@ -62,8 +69,8 @@ public:
   PoseArrayDisplay();
   virtual ~PoseArrayDisplay();
 
-  virtual void onInitialize();
-  virtual void reset();
+  void onInitialize() override;
+  void reset() override;
 
 private Q_SLOTS:
   void updateShapeChoice();
@@ -72,16 +79,16 @@ private Q_SLOTS:
   void allocateCoords(int num);
 
 private:
-  virtual void processMessage( const geometry_msgs::PoseArray::ConstPtr& msg );
+  void processMessage( geometry_msgs::msg::PoseArray::ConstSharedPtr msg ) override;
 
   Ogre::ManualObject* manual_object_;
 
-  rviz::ColorProperty* color_property_;
-  rviz::FloatProperty* length_property_;
-  rviz::FloatProperty* axes_length_property_;
-  rviz::FloatProperty* axes_radius_property_;
-  rviz::EnumProperty* shape_property_;
-  std::vector<rviz::Axes*> coords_objects_;
+  rviz_common::properties::ColorProperty* color_property_;
+  rviz_common::properties::FloatProperty* length_property_;
+  rviz_common::properties::FloatProperty* axes_length_property_;
+  rviz_common::properties::FloatProperty* axes_radius_property_;
+  rviz_common::properties::EnumProperty* shape_property_;
+  std::vector<rviz_rendering::Axes*> coords_objects_;
   std::vector<Ogre::SceneNode*> coords_nodes_;
 
   bool pose_valid_;
