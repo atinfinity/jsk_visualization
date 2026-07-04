@@ -34,7 +34,8 @@
  *********************************************************************/
 
 #include "overlay_utils.h"
-#include <ros/ros.h>
+
+#include <rviz_common/logging.hpp>
 
 namespace jsk_rviz_plugins
 {
@@ -78,14 +79,14 @@ namespace jsk_rviz_plugins
   {
     return getQImage(overlay.getTextureWidth(), overlay.getTextureHeight());
   }
-  
+
   QImage ScopedPixelBuffer::getQImage(OverlayObject& overlay,
                                       QColor& bg_color)
   {
     return getQImage(overlay.getTextureWidth(), overlay.getTextureHeight(),
                      bg_color);
   }
-  
+
   OverlayObject::OverlayObject(const std::string& name)
     : name_(name)
   {
@@ -95,7 +96,7 @@ namespace jsk_rviz_plugins
     panel_ = static_cast<Ogre::PanelOverlayElement*> (
       mOverlayMgr->createOverlayElement("Panel", name_ + "Panel"));
     panel_->setMetricsMode(Ogre::GMM_PIXELS);
-    
+
     panel_material_
       = Ogre::MaterialManager::getSingleton().create(
         material_name,
@@ -109,10 +110,6 @@ namespace jsk_rviz_plugins
     hide();
     panel_material_->unload();
     Ogre::MaterialManager::getSingleton().remove(panel_material_->getName());
-    // Ogre::OverlayManager* mOverlayMgr = Ogre::OverlayManager::getSingletonPtr();
-    // mOverlayMgr->destroyOverlayElement(panel_);
-    //delete panel_;
-    //delete overlay_;
   }
 
   std::string OverlayObject::getName()
@@ -136,18 +133,18 @@ namespace jsk_rviz_plugins
 
   bool OverlayObject::isTextureReady()
   {
-    return !texture_.isNull();
+    return texture_ != nullptr;
   }
 
   void OverlayObject::updateTextureSize(unsigned int width, unsigned int height)
   {
     const std::string texture_name = name_ + "Texture";
     if (width == 0) {
-      ROS_WARN("[OverlayObject] width=0 is specified as texture size");
+      RVIZ_COMMON_LOG_WARNING("[OverlayObject] width=0 is specified as texture size");
       width = 1;
     }
     if (height == 0) {
-      ROS_WARN("[OverlayObject] height=0 is specified as texture size");
+      RVIZ_COMMON_LOG_WARNING("[OverlayObject] height=0 is specified as texture size");
       height = 1;
     }
     if (!isTextureReady() ||
@@ -162,14 +159,14 @@ namespace jsk_rviz_plugins
         texture_name,        // name
         Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
         Ogre::TEX_TYPE_2D,   // type
-        width, height,   // width & height of the render window 
+        width, height,   // width & height of the render window
         0,                   // number of mipmaps
         Ogre::PF_A8R8G8B8,   // pixel format chosen to match a format Qt can use
         Ogre::TU_DEFAULT     // usage
         );
       panel_material_->getTechnique(0)->getPass(0)
         ->createTextureUnitState(texture_name);
-        
+
       panel_material_->getTechnique(0)->getPass(0)
         ->setSceneBlending(Ogre::SBT_TRANSPARENT_ALPHA);
     }
@@ -220,5 +217,5 @@ namespace jsk_rviz_plugins
     }
   }
 
-  
+
 }

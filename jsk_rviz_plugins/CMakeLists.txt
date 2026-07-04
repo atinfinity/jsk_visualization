@@ -1,301 +1,156 @@
-# these plugins should be uploaded to upstream repository
-# https://github.com/ros-visualization/rviz/pull/634
-
-# http://ros.org/doc/groovy/api/catkin/html/user_guide/supposed.html
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.16)
 project(jsk_rviz_plugins)
-if(("$ENV{ROS_DISTRO}" STREQUAL "kinetic") OR ("$ENV{ROS_DISTRO}" STREQUAL "indigo"))
-  # catch special case ROS kinetic where c++11 is not the default yet
-  add_compile_options(-std=c++11)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# support environment does not have visualization such as VTK or Rviz (i.e embedded environment)
-set(USE_VISUALIZATION ON CACHE BOOL "compile with rviz package")
-if(USE_VISUALIZATION)
-  set(RVIZ "rviz")
-  set(JSK_RECOGNITION_UTILS "jsk_recognition_utils") # jsk_recognition_utils depends on pcl/visualization (https://github.com/jsk-ros-pkg/jsk_recognition/blob/09cbce5f0ce7102331f6e48b9f9befc2b1fda869/jsk_recognition_utils/src/pcl_conversion_util.cpp#L37)
-else()
-  set(RVIZ "")
-  set(JSK_RECOGNITION_UTILS "")
-  message(WARNING "Compile without RVIZ/jsk_recognition_utils package")
-endif()
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rviz_common REQUIRED)
+find_package(rviz_rendering REQUIRED)
+find_package(rviz_default_plugins REQUIRED)
+find_package(rviz_ogre_vendor REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(jsk_rviz_plugins_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(image_geometry REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(interactive_markers REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(people_msgs QUIET)
 
-# Load catkin and all dependencies required for this package
-# TODO: remove all from COMPONENTS that are not catkin packages.
-find_package(catkin REQUIRED COMPONENTS ${RVIZ} jsk_hark_msgs jsk_footstep_msgs ${JSK_RECOGNITION_UTILS}
-  people_msgs
-  message_generation std_msgs diagnostic_msgs cv_bridge
-  jsk_topic_tools
-  image_geometry
-  view_controller_msgs
-  geometry_msgs
-  dynamic_reconfigure
-  jsk_recognition_msgs
-  jsk_gui_msgs
-  message_filters)
+find_package(Qt5 REQUIRED COMPONENTS Widgets)
+set(CMAKE_AUTOMOC ON)
 
-# Use ccache if installed to make it fast to generate object files
-if (CMAKE_VERSION VERSION_LESS 3.4)
-  find_program(CCACHE_FOUND ccache)
-  if(CCACHE_FOUND)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-  endif(CCACHE_FOUND)
-endif()
-
-add_message_files(FILES
-  OverlayText.msg OverlayMenu.msg TransformableMarkerOperate.msg ObjectFitCommand.msg
-  Pictogram.msg PictogramArray.msg RecordCommand.msg StringStamped.msg)
-add_service_files(FILES
-  RequestMarkerOperate.srv EusCommand.srv
-  Screenshot.srv
-  )
-catkin_python_setup()
-generate_dynamic_reconfigure_options(
-  cfg/ClassificationResultVisualizer.cfg
-  cfg/ContactStateMarker.cfg
-  cfg/OverlayTextInterface.cfg)
-generate_messages(DEPENDENCIES std_msgs geometry_msgs)
-
-if(USE_VISUALIZATION)
-  set(${LIBRARIES_PROJECT_NAME} ${PROJECT_NAME})
-else()
-  set(${LIBRARIES_PROJECT_NAME} "")
-endif()
-catkin_package(
-    DEPENDS ${RVIZ}
-    CATKIN_DEPENDS jsk_hark_msgs jsk_footstep_msgs
-    ${JSK_RECOGNITION_UTILS} cv_bridge people_msgs image_geometry
-    INCLUDE_DIRS # TODO include
-    LIBRARIES ${LIBRARIES_PROJECT_NAME}
-)
-
-
-set(ROS_BUILD_TYPE Release)
-
-include_directories(src ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS})
-
-# TODO: fill in what other packages will need to use this package
-## LIBRARIES: libraries you create in this project that dependent projects also need
-## CATKIN_DEPENDS: catkin_packages dependent projects also need
-## DEPENDS: system dependencies of this project that dependent projects also need
-
-if(USE_VISUALIZATION AND rviz_QT_VERSION VERSION_LESS "5")
-  find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
-  include(${QT_USE_FILE})
-elseif(USE_VISUALIZATION)
-  find_package(Qt5Widgets REQUIRED)
-endif()
-add_definitions(-DQT_NO_KEYWORDS -g)
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-#set(SOURCE_FILES src/ambient_sound_display.cpp src/ambient_sound_visual.cpp)
-
-set(HEADER_FILES
-  src/ambient_sound_display_groovy.h
-  src/select_point_cloud_publish_action.h
-  src/footstep_display.h
-  src/publish_topic.h
-  src/cancel_action.h
-  src/record_action.h
-  src/polygon_array_display.h
-  src/normal_display.h
-  src/overlay_text_display.h
-  src/overlay_menu_display.h
-  src/overlay_image_display.h
-  src/overlay_camera_display.h
-  src/plotter_2d_display.h
-  src/pie_chart_display.h
-  src/linear_gauge_display.h
-  src/diagnostics_display.h
-  src/quiet_interactive_marker_display.h
-  src/bounding_box_display.h
-  src/bounding_box_array_display.h
-  src/torus_array_display.h
-  src/overlay_diagnostic_display.h
-  src/target_visualizer_display.h
-  src/people_position_measurement_array_display.h
-  src/simple_occupancy_grid_array_display.h
-  src/camera_info_display.h
-  src/close_all_tool.h
-  src/open_all_tool.h
-  src/overlay_picker_tool.h
-  src/object_fit_operator.h
-  src/robot_command_interface.h
-  src/empty_service_call_interface.h
-  src/pictogram_display.h
-  src/pictogram_array_display.h
-  src/view_controller/tablet_view_controller.h
-  src/tablet_controller_panel.h
-  src/video_capture_display.h
-  src/rviz_scene_publisher.h
-  src/twist_stamped_display.h
-  src/pose_array_display.h
-  src/tf_trajectory_display.h
-  src/yes_no_button_interface.h
-  src/segment_array_display.h
-  src/image_transport_hints_property.h
-  src/string_display.h
-  src/human_skeleton_array_display.h
-)
-
-message(STATUS "Check rviz_FOUND: [${rviz_FOUND}], rviz_QT_VERSION: [${rviz_QT_VERSION}]")
-if("${rviz_QT_VERSION}" STREQUAL "")
-  message(WARNING "Compile without RVIZ package : skip qt_wrap_cpp")
-elseif(rviz_QT_VERSION VERSION_LESS "5")
-  qt4_wrap_cpp(MOC_FILES ${HEADER_FILES})
-else()
-  qt5_wrap_cpp(MOC_FILES ${HEADER_FILES})
-endif()
-
+# Phase 1 sources, grouped by shared infrastructure. Groups are enabled as
+# their port to ROS 2 completes.
 set(SOURCE_FILES
-  src/ambient_sound_display_groovy.cpp
-  src/ambient_sound_visual.cpp
-  src/footstep_display.cpp
-  src/publish_topic.cpp
-  src/cancel_action.cpp
-  src/record_action.cpp
-  src/select_point_cloud_publish_action.cpp
-  src/polygon_array_display.cpp
-  src/normal_display.cpp
-  src/normal_visual.cpp
-  src/overlay_text_display.cpp
-  src/overlay_menu_display.cpp
-  src/overlay_image_display.cpp
-  src/overlay_camera_display.cpp
-  src/plotter_2d_display.cpp
-  src/pie_chart_display.cpp
-  src/linear_gauge_display.cpp
-  src/diagnostics_display.cpp
-  src/bounding_box_display.cpp
-  src/bounding_box_array_display.cpp
-  src/torus_array_display.cpp
-  src/quiet_interactive_marker_display.cpp
-  src/target_visualizer_display.cpp
-  src/overlay_diagnostic_display.cpp
-  src/simple_occupancy_grid_array_display.cpp
-  src/people_position_measurement_array_display.cpp
+  # Group A: overlay foundation
   src/overlay_utils.cpp
-  src/facing_visualizer.cpp
-  src/camera_info_display.cpp
-  src/close_all_tool.cpp
-  src/open_all_tool.cpp
-  src/overlay_picker_tool.cpp
-  src/screenshot_listener_tool.cpp
-  src/object_fit_operator.cpp
-  src/robot_command_interface.cpp
-  src/empty_service_call_interface.cpp
-  src/pictogram_display.cpp
-  src/pictogram_array_display.cpp
-  src/view_controller/tablet_view_controller.cpp
-  src/tablet_controller_panel.cpp
-  src/video_capture_display.cpp
-  src/rviz_scene_publisher.cpp
-  src/twist_stamped_display.cpp
-  src/pose_array_display.cpp
-  src/tf_trajectory_display.cpp
-  src/yes_no_button_interface.cpp
-  src/segment_array_display.cpp
-  src/image_transport_hints_property.cpp
+  src/overlay_text_display.cpp
   src/string_display.cpp
-  src/human_skeleton_array_display.cpp
-  ${MOC_FILES}
 )
-if(jsk_recognition_msgs_VERSION VERSION_LESS 1.2.15)
-  message(WARNING "jsk_recognition_msgs ${jsk_recognition_msgs_VERSION} < 1.2.15 does not support human_skeleton_array_display.cpp")
-  list(REMOVE_ITEM HEADER_FILES src/human_skeleton_array_display.h)
-  list(REMOVE_ITEM SOURCE_FILES src/human_skeleton_array_display.cpp)
-  list(REMOVE_ITEM SOURCE_FILES  ${PROJECT_BINARY_DIR}/src/moc_human_skeleton_array_display.cxx)
-endif()
 
-if(NOT USE_VISUALIZATION)
-  message(WARNING "polygon_array_display, simple_occupancy_grid_array_display requries jsk_recognition_utils")
-  list(REMOVE_ITEM HEADER_FILES src/polygon_array_display.h)
-  list(REMOVE_ITEM SOURCE_FILES src/polygon_array_display.cpp)
-  list(REMOVE_ITEM HEADER_FILES src/simple_occupancy_grid_array_display.h)
-  list(REMOVE_ITEM SOURCE_FILES src/simple_occupancy_grid_array_display.cpp)
-endif()
+# Group B: 2D overlay family
+# src/overlay_menu_display.cpp
+# src/pie_chart_display.cpp
+# src/plotter_2d_display.cpp
+# src/linear_gauge_display.cpp
+# src/overlay_diagnostic_display.cpp
+# src/overlay_image_display.cpp
+# src/image_transport_hints_property.cpp
+# src/overlay_picker_tool.cpp
 
-if(rviz_FOUND)
-add_library(jsk_rviz_plugins ${SOURCE_FILES} ${UIC_FILES})
-if(rviz_QT_VERSION VERSION_LESS "5")
-  target_link_libraries(jsk_rviz_plugins ${QT_LIBRARIES} ${catkin_LIBRARIES} ${rviz_DEFAULT_PLUGIN_LIBRARIES})
+# Group C: 3D scene displays
+# src/facing_visualizer.cpp
+# src/target_visualizer_display.cpp
+# src/pictogram_display.cpp
+# src/pictogram_array_display.cpp
+# src/diagnostics_display.cpp
+# src/tf_trajectory_display.cpp
+# src/twist_stamped_display.cpp
+# src/pose_array_display.cpp
+# src/camera_info_display.cpp
+# src/normal_display.cpp
+# src/normal_visual.cpp
+
+# Group D: tools and panels
+# src/close_all_tool.cpp
+# src/open_all_tool.cpp
+# src/screenshot_listener_tool.cpp
+# src/publish_topic.cpp
+# src/empty_service_call_interface.cpp
+# src/record_action.cpp
+# src/object_fit_operator.cpp
+# src/robot_command_interface.cpp
+# src/cancel_action.cpp
+# src/select_point_cloud_publish_action.cpp
+
+# Group E: capture and rviz-internal displays
+# src/rviz_scene_publisher.cpp
+# src/video_capture_display.cpp
+# src/quiet_interactive_marker_display.cpp
+# src/overlay_camera_display.cpp
+
+if(people_msgs_FOUND)
+  # list(APPEND SOURCE_FILES src/people_position_measurement_array_display.cpp)
 else()
-  target_link_libraries(jsk_rviz_plugins Qt5::Widgets ${catkin_LIBRARIES} ${rviz_DEFAULT_PLUGIN_LIBRARIES})
-endif()
-add_dependencies(jsk_rviz_plugins
-  jsk_footstep_msgs_generate_messages_cpp
-  jsk_gui_msgs_generate_messages_cpp
-  jsk_hark_msgs_generate_messages_cpp
-  jsk_recognition_msgs_generate_messages_cpp
-  people_msgs_generate_messages_cpp
-  view_controller_msgs_generate_messages_cpp
-  ${PROJECT_NAME}_generate_messages_cpp
-  ${catkin_EXPORTED_TARGETS})
-
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set_target_properties(jsk_rviz_plugins PROPERTIES LINK_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -z defs")
+  message(WARNING "people_msgs not found: skipping PeoplePositionMeasurementArray display")
 endif()
 
-# From https://github.com/jsk-ros-pkg/jsk_recognition/pull/2345
-# Install header files directly into ${CATKIN_PACKAGE_INCLUDE_DESTINATION}.
-# If the package has setup.py and modules under src/${PROJECT_NAME}/,
-# install python executables directly into ${CATKIN_PACKAGE_BIN_DESTINATION}.
-# However, if it doesn't have setup.py, directories including python executables
-# should be installed recursively into ${CATKIN_PACKAGE_SHARE_DESTINATION}.
-# Also, other directories like 'launch' or 'sample' must be installed
-# recursively into ${CATKIN_PACKAGE_SHARE_DESTINATION}.
-# Be careful that 'launch' and 'launch/' are different: the former is directory
-# and the latter is each content.
-install(TARGETS jsk_rviz_plugins
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
-endif(rviz_FOUND)
+add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+target_include_directories(${PROJECT_NAME} PRIVATE src)
+target_compile_definitions(${PROJECT_NAME} PRIVATE QT_NO_KEYWORDS)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+  Qt5::Widgets
+  rviz_common::rviz_common
+  rviz_rendering::rviz_rendering
+  rviz_default_plugins::rviz_default_plugins
+  rviz_ogre_vendor::OgreMain
+  rviz_ogre_vendor::OgreOverlay
+  rclcpp::rclcpp
+  tf2_ros::tf2_ros
+  image_transport::image_transport
+  interactive_markers::interactive_markers
+  cv_bridge::cv_bridge
+  image_geometry::image_geometry
+  message_filters::message_filters
+  ${jsk_rviz_plugins_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${std_srvs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${diagnostic_msgs_TARGETS}
+  ${action_msgs_TARGETS})
+if(people_msgs_FOUND)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE JSK_RVIZ_PLUGINS_HAVE_PEOPLE_MSGS)
+  target_link_libraries(${PROJECT_NAME} PUBLIC ${people_msgs_TARGETS})
+endif()
 
-file(GLOB PYTHON_SCRIPTS scripts/*.py)
-catkin_install_python(
-  PROGRAMS ${PYTHON_SCRIPTS}
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 
-install(FILES plugin_description.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-)
-install(DIRECTORY cfg config icons launch test
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-  USE_SOURCE_PERMISSIONS
-)
-file(GLOB PYTHON_SAMPLES samples/*.py)
-catkin_install_python(
-  PROGRAMS ${PYTHON_SAMPLES}
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/samples
-)
+install(TARGETS ${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
 
-install(DIRECTORY src/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.h"
-)
+install(DIRECTORY config icons launch DESTINATION share/${PROJECT_NAME})
 
-if (CATKIN_ENABLE_TESTING)
-  # download and install sample data
-  add_custom_target(${PROJECT_NAME}_install_sample_data COMMAND python$ENV{ROS_PYTHON_VERSION} ${PROJECT_SOURCE_DIR}/test/install_sample_data.py)
-  add_dependencies(tests ${PROJECT_NAME}_install_sample_data)
-  # run rostest for melodic+
-  find_package(rostest REQUIRED)
-  if("$ENV{ROS_DISTRO}" STRGREATER "indigo") # support from kinetic
-    file(GLOB TEST_FILES test/*.test test/*.xml)
-    foreach(TEST_FILE ${TEST_FILES})
-      # if we failed to install sample data, skip testing face_detect and normal
-      if((NOT EXISTS "${PROJECT_SOURCE_DIR}/test/data/2017-06-20-12-00-00_people_images_in_lab.bag") AND
-	  ((${TEST_FILE} STREQUAL "${PROJECT_SOURCE_DIR}/test/face_detector.xml") OR
-	    (${TEST_FILE} STREQUAL "${PROJECT_SOURCE_DIR}/test/normal.xml")))
-	message(STATUS "Skip test for ${TEST_FILE} due to missing bag file")
-	continue()
-      endif()
-      message(STATUS "Run test for ${TEST_FILE}")
-      add_rostest(${TEST_FILE})
-    endforeach()
+ament_python_install_package(${PROJECT_NAME} PACKAGE_DIR python/${PROJECT_NAME})
+
+# Python executables are installed group by group as their rclpy port lands.
+# install(PROGRAMS
+#   scripts/rosconsole_overlay_text.py
+#   DESTINATION lib/${PROJECT_NAME})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_plugin_load test/test_plugin_load.cpp
+    SKIP_LINKING_MAIN_LIBRARIES)
+  if(TARGET test_plugin_load)
+    target_link_libraries(test_plugin_load
+      Qt5::Widgets
+      rviz_common::rviz_common
+      pluginlib::pluginlib)
+    target_compile_definitions(test_plugin_load PRIVATE QT_NO_KEYWORDS)
   endif()
 endif()
+
+ament_export_libraries(${PROJECT_NAME})
+ament_export_dependencies(
+  rclcpp rviz_common rviz_rendering rviz_default_plugins rviz_ogre_vendor
+  jsk_rviz_plugins_msgs std_msgs std_srvs geometry_msgs sensor_msgs
+  diagnostic_msgs action_msgs cv_bridge image_geometry image_transport
+  interactive_markers message_filters tf2_ros)
+ament_package()
