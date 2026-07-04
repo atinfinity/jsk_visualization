@@ -39,8 +39,11 @@
 #include <rviz_common/display_group.hpp>
 #include <rviz_common/display.hpp>
 #include <rviz_common/render_panel.hpp>
-#include <QImageWriter>
-#include <QPixmap>
+#include <QCoreApplication>
+#include <QThread>
+#include "render_window_compat.h"
+#include <OgreRenderTarget.h>
+#include <OgreViewport.h>
 #include "screenshot_listener_tool.h"
 
 namespace jsk_rviz_plugins
@@ -83,12 +86,26 @@ namespace jsk_rviz_plugins
     jsk_rviz_plugins_msgs::srv::Screenshot::Response::SharedPtr res)
   {
     (void)res;
-    rviz_common::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
-    QPixmap screenshot = panel->grab();
     QString output_file = QString::fromStdString(req->file_name);
-    QImageWriter writer(output_file);
-    writer.write(screenshot.toImage());
+    // Ogre render targets may only be touched from the GUI (render) thread
+    if (QThread::currentThread() == QCoreApplication::instance()->thread()) {
+      captureToFile(output_file);
+    }
+    else {
+      QMetaObject::invokeMethod(this, "captureToFile",
+                                Qt::BlockingQueuedConnection,
+                                Q_ARG(QString, output_file));
+    }
     return true;
+  }
+
+  void ScreenshotListenerTool::captureToFile(const QString& file_name)
+  {
+    rviz_rendering::RenderWindow* render_window
+      = context_->getViewManager()->getRenderPanel()->getRenderWindow();
+    Ogre::Viewport* viewport
+      = rviz_rendering::RenderWindowOgreAdapter::getOgreViewport(render_window);
+    viewport->getTarget()->writeContentsToFile(file_name.toStdString());
   }
 
 }

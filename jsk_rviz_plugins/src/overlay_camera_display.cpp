@@ -35,6 +35,8 @@
 
 #include "overlay_camera_display.h"
 
+#include "overlay_utils.h"
+
 #include <OgreHardwarePixelBuffer.h>
 #include <OgreMaterialManager.h>
 #include <OgreRenderTexture.h>
@@ -149,6 +151,7 @@ namespace jsk_rviz_plugins
   void OverlayCameraDisplay::onInitialize()
   {
     update_topic_property_->initialize(context_->getRosNodeAbstraction());
+    prepareOverlays(context_->getSceneManager());
 
     texture_ = std::make_unique<rviz_default_plugins::displays::ROSImageTexture>();
 
@@ -169,13 +172,19 @@ namespace jsk_rviz_plugins
     bg_material_->getTechnique(0)->setLightingEnabled(false);
     Ogre::TextureUnitState* tu
       = bg_material_->getTechnique(0)->getPass(0)->createTextureUnitState();
-    tu->setTextureName(texture_->getName());
+    // bind by pointer: the ROSImageTexture texture lives in the
+    // "rviz_rendering" resource group and cannot be resolved by name from a
+    // material in the default group
+    tu->setTexture(texture_->getTexture());
     tu->setTextureFiltering(Ogre::TFO_NONE);
+    tu->setTextureAddressingMode(Ogre::TextureUnitState::TAM_CLAMP);
     bg_material_->setCullingMode(Ogre::CULL_NONE);
     bg_material_->setSceneBlending(Ogre::SBT_REPLACE);
 
     bg_screen_rect_ = new Ogre::Rectangle2D(true);
     bg_screen_rect_->setCorners(-1.0f, 1.0f, 1.0f, -1.0f);
+    bg_screen_rect_->setUVs(Ogre::Vector2(0.0f, 0.0f), Ogre::Vector2(0.0f, 1.0f),
+                            Ogre::Vector2(1.0f, 0.0f), Ogre::Vector2(1.0f, 1.0f));
     bg_screen_rect_->setRenderQueueGroup(Ogre::RENDER_QUEUE_BACKGROUND);
     Ogre::AxisAlignedBox aabInf;
     aabInf.setInfinite();
@@ -199,6 +208,7 @@ namespace jsk_rviz_plugins
     panel_ = static_cast<Ogre::PanelOverlayElement*>(
       mgr->createOverlayElement("Panel", base_name + "Panel"));
     panel_->setMetricsMode(Ogre::GMM_PIXELS);
+    panel_->setUV(0.0, 0.0, 1.0, 1.0);
     panel_->setMaterialName(panel_material_->getName());
     overlay_->add2D(panel_);
 

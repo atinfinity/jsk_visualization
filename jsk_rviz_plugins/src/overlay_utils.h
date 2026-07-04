@@ -53,9 +53,19 @@
 #include <memory>
 #include <string>
 
+namespace Ogre
+{
+  class SceneManager;
+}
+
 namespace jsk_rviz_plugins
 {
   class OverlayObject;
+
+  // Ogre overlays are only rendered for scene managers that have the
+  // OverlaySystem registered as a render queue listener; rviz2 itself never
+  // registers it. Idempotent.
+  void prepareOverlays(Ogre::SceneManager* scene_manager);
 
   class ScopedPixelBuffer
   {
@@ -82,7 +92,7 @@ namespace jsk_rviz_plugins
   public:
     typedef std::shared_ptr<OverlayObject> Ptr;
 
-    OverlayObject(const std::string& name);
+    OverlayObject(Ogre::SceneManager* scene_manager, const std::string& name);
     virtual ~OverlayObject();
 
     virtual std::string getName();

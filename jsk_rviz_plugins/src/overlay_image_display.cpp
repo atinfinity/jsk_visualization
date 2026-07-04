@@ -180,7 +180,7 @@ namespace jsk_rviz_plugins
         static int count = 0;
         rviz_common::UniformStringStream ss;
         ss << "OverlayImageDisplayObject" << count++;
-        overlay_.reset(new OverlayObject(ss.str()));
+        overlay_.reset(new OverlayObject(context_->getSceneManager(), ss.str()));
         overlay_->show();
       }
       overlay_->updateTextureSize(msg_->width, msg_->height);

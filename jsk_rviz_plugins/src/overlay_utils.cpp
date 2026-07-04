@@ -36,9 +36,23 @@
 #include "overlay_utils.h"
 
 #include <rviz_common/logging.hpp>
+#include <rviz_rendering/render_system.hpp>
+
+#include <OgreSceneManager.h>
+
+#include <set>
 
 namespace jsk_rviz_plugins
 {
+  void prepareOverlays(Ogre::SceneManager* scene_manager)
+  {
+    static std::set<Ogre::SceneManager*> prepared;
+    if (prepared.count(scene_manager) == 0) {
+      rviz_rendering::RenderSystem::get()->prepareOverlays(scene_manager);
+      prepared.insert(scene_manager);
+    }
+  }
+
   ScopedPixelBuffer::ScopedPixelBuffer(Ogre::HardwarePixelBufferSharedPtr pixel_buffer):
     pixel_buffer_(pixel_buffer)
   {
@@ -87,9 +101,11 @@ namespace jsk_rviz_plugins
                      bg_color);
   }
 
-  OverlayObject::OverlayObject(const std::string& name)
+  OverlayObject::OverlayObject(Ogre::SceneManager* scene_manager,
+                               const std::string& name)
     : name_(name)
   {
+    prepareOverlays(scene_manager);
     std::string material_name = name_ + "Material";
     Ogre::OverlayManager* mOverlayMgr = Ogre::OverlayManager::getSingletonPtr();
     overlay_ = mOverlayMgr->create(name_);

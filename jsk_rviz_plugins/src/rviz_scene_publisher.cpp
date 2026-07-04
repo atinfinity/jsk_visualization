@@ -39,9 +39,9 @@
 #include <rviz_common/display_group.hpp>
 #include <rviz_common/display.hpp>
 #include <rviz_common/render_panel.hpp>
-#include <QImage>
-#include <QScreen>
-#include <QGuiApplication>
+#include "render_window_compat.h"
+#include <OgreRenderTarget.h>
+#include <OgreViewport.h>
 
 namespace jsk_rviz_plugins
 {
@@ -85,14 +85,22 @@ namespace jsk_rviz_plugins
 
   void RvizScenePublisher::update(float /*wall_dt*/, float /*ros_dt*/)
   {
-    rviz_common::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
-    // NOTE: grabWindow requires an X11 session; on Wayland run rviz2 with
-    // QT_QPA_PLATFORM=xcb, otherwise the image is empty.
-    QPixmap screenshot
-      = QGuiApplication::primaryScreen()->grabWindow(panel->winId());
-    QImage src = screenshot.toImage().convertToFormat(QImage::Format_RGB888);  // RGB
-    cv::Mat image(src.height(), src.width(), CV_8UC3,
-                  (uchar*)src.bits(), src.bytesPerLine());  // RGB
+    // read the pixels straight out of the Ogre render target; Qt window
+    // grabbing breaks the GL compositing of the render panel
+    rviz_rendering::RenderWindow* render_window
+      = context_->getViewManager()->getRenderPanel()->getRenderWindow();
+    Ogre::RenderTarget* target
+      = rviz_rendering::RenderWindowOgreAdapter::getOgreViewport(render_window)
+        ->getTarget();
+    const unsigned int w = target->getWidth();
+    const unsigned int h = target->getHeight();
+    if (w == 0 || h == 0) {
+      return;
+    }
+    cv::Mat image(h, w, CV_8UC3);  // RGB
+    Ogre::PixelBox pixel_box(w, h, 1, Ogre::PF_BYTE_RGB, image.data);
+    target->copyContentsToMemory(Ogre::Box(0, 0, w, h), pixel_box,
+                                 Ogre::RenderTarget::FB_AUTO);
 
     sensor_msgs::msg::Image img_msg;
     std_msgs::msg::Header header;

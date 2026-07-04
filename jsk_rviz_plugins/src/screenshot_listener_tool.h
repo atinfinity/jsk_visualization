@@ -47,12 +47,16 @@ namespace jsk_rviz_plugins
 {
   class ScreenshotListenerTool: public rviz_common::Tool
   {
+    Q_OBJECT
   public:
     ScreenshotListenerTool();
     virtual ~ScreenshotListenerTool();
     virtual void onInitialize();
     virtual void activate();
     virtual void deactivate();
+  protected Q_SLOTS:
+    // must run on the GUI (render) thread
+    void captureToFile(const QString& file_name);
   protected:
     virtual bool takeScreenShot(
       jsk_rviz_plugins_msgs::srv::Screenshot::Request::SharedPtr req,

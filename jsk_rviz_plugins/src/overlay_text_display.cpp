@@ -271,7 +271,7 @@ namespace jsk_rviz_plugins
       static int count = 0;
       rviz_common::UniformStringStream ss;
       ss << "OverlayTextDisplayObject" << count++;
-      overlay_.reset(new jsk_rviz_plugins::OverlayObject(ss.str()));
+      overlay_.reset(new jsk_rviz_plugins::OverlayObject(context_->getSceneManager(), ss.str()));
       overlay_->show();
     }
     if (overlay_) {

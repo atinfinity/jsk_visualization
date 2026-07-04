@@ -187,7 +187,7 @@ namespace jsk_rviz_plugins
     static int count = 0;
     rviz_common::UniformStringStream ss;
     ss << "Plotter2DDisplayObject" << count++;
-    overlay_.reset(new OverlayObject(ss.str()));
+    overlay_.reset(new OverlayObject(context_->getSceneManager(), ss.str()));
     updateBufferSize();
     onEnable();
     updateShowValue();

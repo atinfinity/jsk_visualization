@@ -36,17 +36,6 @@ Visualization Manager:
       height: 240
       left: 30
       top: 30
-    - Class: jsk_rviz_plugin/CameraInfo
-      Enabled: true
-      Name: CameraInfo
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_sample/camera_info
-      Value: true
-      far clip: 2
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
