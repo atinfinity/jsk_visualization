@@ -11,6 +11,7 @@ from geometry_msgs.msg import PoseArray
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 from jsk_recognition_msgs.msg import ClassificationResult
 from jsk_recognition_msgs.msg import PeoplePoseArray
+from posedetection_msgs.msg import ObjectDetection
 from rcl_interfaces.msg import FloatingPointRange
 from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.msg import SetParametersResult
@@ -79,8 +80,8 @@ class ClassificationResultVisualizer(Node):
             self, PoseArray, '~/input/poses', qos_profile=1)
         sub_people = MF.Subscriber(
             self, PeoplePoseArray, '~/input/people', qos_profile=1)
-        # NOTE: '~/input/ObjectDetection' is not ported because
-        # posedetection_msgs is not available on ROS 2.
+        sub_od = MF.Subscriber(
+            self, ObjectDetection, '~/input/ObjectDetection', qos_profile=1)
 
         if approximate_sync:
             sync_box = MF.ApproximateTimeSynchronizer(
@@ -89,6 +90,8 @@ class ClassificationResultVisualizer(Node):
                 [sub_pose, sub_cls], queue_size=queue_size, slop=slop)
             sync_people = MF.ApproximateTimeSynchronizer(
                 [sub_people, sub_cls], queue_size=queue_size, slop=slop)
+            sync_od = MF.ApproximateTimeSynchronizer(
+                [sub_od, sub_cls], queue_size=queue_size, slop=slop)
         else:
             sync_box = MF.TimeSynchronizer(
                 [sub_box, sub_cls], queue_size=queue_size)
@@ -96,12 +99,15 @@ class ClassificationResultVisualizer(Node):
                 [sub_pose, sub_cls], queue_size=queue_size)
             sync_people = MF.TimeSynchronizer(
                 [sub_people, sub_cls], queue_size=queue_size)
+            sync_od = MF.TimeSynchronizer(
+                [sub_od, sub_cls], queue_size=queue_size)
 
         sync_box.registerCallback(self.box_msg_callback)
         sync_pose.registerCallback(self.pose_msg_callback)
         sync_people.registerCallback(self.people_msg_callback)
+        sync_od.registerCallback(self.od_msg_callback)
 
-        self.subscribers = [sub_cls, sub_box, sub_pose, sub_people]
+        self.subscribers = [sub_cls, sub_box, sub_pose, sub_people, sub_od]
 
     def config_callback(self):
         config = self.config
@@ -143,6 +149,13 @@ class ClassificationResultVisualizer(Node):
             if not b.header.frame_id:
                 b.header = people.header
                 b.pose = b.poses[0]
+        self.box_msg_callback(bboxes, classes)
+
+    def od_msg_callback(self, od, classes):
+        bboxes = BoundingBoxArray(header=od.header)
+        for obj in od.objects:
+            b = BoundingBox()
+            b.pose = obj.pose
         self.box_msg_callback(bboxes, classes)
 
     def box_msg_callback(self, bboxes, classes):

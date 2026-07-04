@@ -234,8 +234,6 @@
     </description>
   </class>
 
-  <!-- OverlayCamera forks the ROS 1 rviz camera display internals, which
-       were fully restructured in rviz2; deferred until rewritten.
   <class name="jsk_rviz_plugin/OverlayCamera"
          type="jsk_rviz_plugins::OverlayCameraDisplay"
          base_class_type="rviz_common::Display">
@@ -243,7 +241,6 @@
       Displays sensor_msgs::Image with superimposing objects as overlay
     </description>
   </class>
-  -->
 
   <!-- Phase 2: displays using jsk_recognition_msgs / jsk_footstep_msgs /
        jsk_hark_msgs (built from source in this workspace) -->

@@ -1,7 +1,18 @@
-icon_include_package: jsk_rviz_plugins
-
-rviz_service_call:
-    buttons:
-    - {icon: reset-pose.jpg, service_name: "/target", text: "Reset Pose"}
-    - {icon: reset-manip-pose.jpg, service_name: "/target2", text: "Reset Manip"}
-    - {icon: init-pose.jpg, service_name: "/target3", text: "Init Pose"}
+# ROS 2 parameter file for the EmptyServiceCallInterfaceAction panel.
+/**:
+  ros__parameters:
+    icon_include_package: jsk_rviz_plugins
+    rviz_service_call:
+      buttons:
+        '0':
+          icon: reset-pose.jpg
+          service_name: /target
+          text: Reset Pose
+        '1':
+          icon: reset-manip-pose.jpg
+          service_name: /target2
+          text: Reset Manip
+        '2':
+          icon: init-pose.jpg
+          service_name: /target3
+          text: Init Pose

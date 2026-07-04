@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ###############################################################################
 # Software License Agreement (BSD License)
 #
@@ -33,25 +33,27 @@
 # POSSIBILITY OF SUCH DAMAGE.
 ###############################################################################
 
-from __future__ import print_function
+import rclpy
 
-import sys
-import traceback
-import rospy
-
-from jsk_rviz_plugins.msg import OverlayText
 from jsk_rviz_plugins.overlay_text_interface import OverlayTextInterface
 
-rospy.init_node('publish_overlay_text_interface')
-text_interface = OverlayTextInterface("~text")
-rospy.loginfo("publish text_interface")
-rate = rospy.Rate(1)
 
-try:
-    while not rospy.is_shutdown():
-        rospy.loginfo("publish text_interface")
-        text_interface.publish("test")
-        rate.sleep()
-except rospy.ROSException as e:
-    print(traceback.format_exc(), file=sys.stderr)
-    sys.exit(1)
+def main():
+    rclpy.init()
+    node = rclpy.create_node('publish_overlay_text_interface')
+    text_interface = OverlayTextInterface(node, '~/text')
+    node.get_logger().info('publish text_interface')
+
+    def timer_cb():
+        node.get_logger().info('publish text_interface')
+        text_interface.publish('test')
+
+    node.create_timer(1.0, timer_cb)
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+
+
+if __name__ == '__main__':
+    main()

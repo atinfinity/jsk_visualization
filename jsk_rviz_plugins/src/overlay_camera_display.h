@@ -33,157 +33,124 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#ifndef JSK_RVIZ_PLUGINS_OVERLAY_CAMERA_DISPLAY_H_
-#define JSK_RVIZ_PLUGINS_OVERLAY_CAMERA_DISPLAY_H_
+// ROS 2 rewrite: instead of forking the rviz camera display internals,
+// this renders the 3D scene from the camera viewpoint into an offscreen
+// Ogre render texture (with the live image as backdrop) and shows that
+// texture as a 2D overlay on the main rviz view.
 
-#include <rviz/default_plugin/camera_display.h>
+#ifndef JSK_RVIZ_PLUGIN_OVERLAY_CAMERA_DISPLAY_H_
+#define JSK_RVIZ_PLUGIN_OVERLAY_CAMERA_DISPLAY_H_
 
 #ifndef Q_MOC_RUN
-#include <QObject>
+#include <rviz_common/display.hpp>
+#include <rviz_common/properties/ros_topic_property.hpp>
+#include <rviz_common/properties/int_property.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_default_plugins/displays/image/ros_image_texture.hpp>
 
+#include <OgreCamera.h>
 #include <OgreMaterial.h>
+#include <OgreRectangle2D.h>
 #include <OgreRenderTargetListener.h>
-#include <OgreSharedPtr.h>
+#include <OgreSceneNode.h>
+#include <OgreTexture.h>
+#include <Overlay/OgreOverlay.h>
+#include <Overlay/OgrePanelOverlayElement.h>
 
-# include <sensor_msgs/CameraInfo.h>
+#include <image_transport/image_transport.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
-# include <message_filters/subscriber.h>
-#if ROS_VERSION_MINIMUM(1, 15, 0) // noetic and greater
-# include <tf2_ros/message_filter.h>
-#else
-# include <tf/message_filter.h>
+#include <memory>
+#include <mutex>
+
+#include "image_transport_hints_property.h"
 #endif
 
-# include "rviz/image/image_display_base.h"
-# include "rviz/image/ros_image_texture.h"
-# include "rviz/render_panel.h"
-
-#include "overlay_utils.h"
-#endif
-
-namespace Ogre
-{
-class SceneNode;
-class ManualObject;
-class Rectangle2D;
-class Camera;
-}
-
-namespace rviz
-{
-
-class EnumProperty;
-class FloatProperty;
-class IntProperty;
-class RenderPanel;
-class RosTopicProperty;
-class DisplayGroupVisibilityProperty;
-}
-/**
- * \class CameraDisplay
- *
- */
 namespace jsk_rviz_plugins
 {
-using namespace rviz;
-class OverlayCameraDisplay: public rviz::ImageDisplayBase, public Ogre::RenderTargetListener
-{
-Q_OBJECT
-public:
-  OverlayCameraDisplay();
-  virtual ~OverlayCameraDisplay();
+  class OverlayCameraDisplay: public rviz_common::Display,
+                              public Ogre::RenderTargetListener
+  {
+    Q_OBJECT
+  public:
+    OverlayCameraDisplay();
+    virtual ~OverlayCameraDisplay();
 
-  // Overrides from Display
-  virtual void onInitialize();
-  virtual void fixedFrameChanged();
-  virtual void update( float wall_dt, float ros_dt );
-  virtual void reset();
+    // methods for OverlayPickerTool
+    virtual bool isInRegion(int x, int y);
+    virtual void movePosition(int x, int y);
+    virtual void setPosition(int x, int y);
+    virtual int getX() { return left_; }
+    virtual int getY() { return top_; }
 
-  // Overrides from Ogre::RenderTargetListener
-  virtual void preRenderTargetUpdate( const Ogre::RenderTargetEvent& evt );
-  virtual void postRenderTargetUpdate( const Ogre::RenderTargetEvent& evt );
+    // Ogre::RenderTargetListener: show the image backdrop only while the
+    // offscreen texture is being rendered.
+    void preRenderTargetUpdate(const Ogre::RenderTargetEvent& evt) override;
+    void postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt) override;
 
-  static const QString BACKGROUND;
-  static const QString OVERLAY;
-  static const QString BOTH;
+  protected:
+    void onInitialize() override;
+    void onEnable() override;
+    void onDisable() override;
+    void update(float wall_dt, float ros_dt) override;
+    void reset() override;
 
-protected:
-  // overrides from Display
-  virtual void onEnable();
-  virtual void onDisable();
-  
-  ROSImageTexture texture_;
-  RenderPanel* render_panel_;
+    virtual void subscribe();
+    virtual void unsubscribe();
+    virtual void processImage(const sensor_msgs::msg::Image::ConstSharedPtr& msg);
+    virtual void ensureRenderTexture(unsigned int width, unsigned int height);
+    virtual void destroyRenderTexture();
+    virtual bool updateCamera();
 
-private Q_SLOTS:
-  void forceRender();
-  void updateAlpha();
+    ////////////////////////////////////////////////////////
+    // properties
+    ////////////////////////////////////////////////////////
+    rviz_common::properties::RosTopicProperty* update_topic_property_;
+    ImageTransportHintsProperty* transport_hint_property_;
+    rviz_common::properties::IntProperty* width_property_;
+    rviz_common::properties::IntProperty* height_property_;
+    rviz_common::properties::IntProperty* left_property_;
+    rviz_common::properties::IntProperty* top_property_;
+    rviz_common::properties::FloatProperty* zoom_property_;
+    rviz_common::properties::FloatProperty* far_clip_property_;
 
-  virtual void updateQueueSize();
+    ////////////////////////////////////////////////////////
+    // ROS
+    ////////////////////////////////////////////////////////
+    image_transport::Subscriber image_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub_;
+    sensor_msgs::msg::CameraInfo::ConstSharedPtr current_caminfo_;
+    sensor_msgs::msg::Image::ConstSharedPtr current_image_;
+    std::mutex mutex_;
 
-private:
-  void subscribe();
-  void unsubscribe();
+    ////////////////////////////////////////////////////////
+    // Ogre
+    ////////////////////////////////////////////////////////
+    std::unique_ptr<rviz_default_plugins::displays::ROSImageTexture> texture_;
+    Ogre::TexturePtr render_texture_;
+    Ogre::Camera* camera_;
+    Ogre::SceneNode* camera_node_;
+    Ogre::SceneNode* bg_scene_node_;
+    Ogre::Rectangle2D* bg_screen_rect_;
+    Ogre::MaterialPtr bg_material_;
+    Ogre::Overlay* overlay_;
+    Ogre::PanelOverlayElement* panel_;
+    Ogre::MaterialPtr panel_material_;
 
-  virtual void processMessage(const sensor_msgs::Image::ConstPtr& msg);
-  void caminfoCallback( const sensor_msgs::CameraInfo::ConstPtr& msg );
+    int width_;
+    int height_;
+    int left_;
+    int top_;
+    bool new_image_arrived_;
 
-  bool updateCamera();
-
-  void clear();
-  void updateStatus();
-
-  Ogre::SceneNode* bg_scene_node_;
-  Ogre::SceneNode* fg_scene_node_;
-
-  Ogre::Rectangle2D* bg_screen_rect_;
-  Ogre::MaterialPtr bg_material_;
-
-  Ogre::Rectangle2D* fg_screen_rect_;
-  Ogre::MaterialPtr fg_material_;
-
-  message_filters::Subscriber<sensor_msgs::CameraInfo> caminfo_sub_;
-#if ROS_VERSION_MINIMUM(1, 15, 0) // noetic and greater
-  tf2_ros::MessageFilter<sensor_msgs::CameraInfo>* caminfo_tf_filter_;
-#else
-  tf::MessageFilter<sensor_msgs::CameraInfo>* caminfo_tf_filter_;
-#endif
-
-  FloatProperty* alpha_property_;
-  EnumProperty* image_position_property_;
-  FloatProperty* zoom_property_;
-  DisplayGroupVisibilityProperty* visibility_property_;
-
-  sensor_msgs::CameraInfo::ConstPtr current_caminfo_;
-  boost::mutex caminfo_mutex_;
-
-  bool new_caminfo_;
-
-  bool caminfo_ok_;
-
-  bool force_render_;
-
-  uint32_t vis_bit_;
-protected:
-  OverlayObject::Ptr overlay_;
-  void redraw();
-  rviz::IntProperty* width_property_;
-  rviz::IntProperty* height_property_;
-  rviz::IntProperty* left_property_;
-  rviz::IntProperty* top_property_;
-  rviz::FloatProperty* texture_alpha_property_;
-  int width_, height_;
-  int left_, top_;
-  float texture_alpha_;
-  bool initializedp_;
-private Q_SLOTS:
-  void updateWidth();
-  void updateHeight();
-  void updateLeft();
-  void updateTop();
-  void updateTextureAlpha();
-};
-
+  protected Q_SLOTS:
+    void updateTopic();
+    void updateWidth();
+    void updateHeight();
+    void updateLeft();
+    void updateTop();
+  };
 }
 
 #endif

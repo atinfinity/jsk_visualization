@@ -96,11 +96,8 @@ set(SOURCE_FILES
   src/yes_no_button_interface.cpp
   src/tablet_controller_panel.cpp
   src/view_controller/tablet_view_controller.cpp
+  src/overlay_camera_display.cpp
 )
-
-# Deferred: forks the ROS 1 rviz camera display internals, which were fully
-# restructured in rviz2. Needs a rewrite against rviz_default_plugins.
-# src/overlay_camera_display.cpp
 
 if(people_msgs_FOUND)
   list(APPEND SOURCE_FILES src/people_position_measurement_array_display.cpp)
@@ -171,9 +168,11 @@ install(PROGRAMS
   scripts/twist_stamped_add_header.py
   scripts/classification_result_visualizer.py
   scripts/rviz_mouse_point_to_tablet.py
+  test/test_overlay_text_interface.py
   samples/bounding_box_sample.py
   samples/diagnostics_sample.py
   samples/footstep_sample.py
+  samples/normal_sample.py
   samples/overlay_menu_sample.py
   samples/overlay_sample.py
   samples/pictogram.py
@@ -187,6 +186,9 @@ install(PROGRAMS
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(launch_testing_ament_cmake REQUIRED)
+  add_launch_test(test/test_overlay_text_interface_launch.py
+    TIMEOUT 60)
   ament_add_gtest(test_plugin_load test/test_plugin_load.cpp
     SKIP_LINKING_MAIN_LIBRARIES)
   if(TARGET test_plugin_load)
