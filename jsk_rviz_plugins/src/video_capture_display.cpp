@@ -34,45 +34,42 @@
  *********************************************************************/
 
 #include "video_capture_display.h"
-#if CV_MAJOR_VERSION >= 4
-#include <opencv2/videoio/legacy/constants_c.h>
-#include <opencv2/imgproc/types_c.h>
-#endif
-#include <rviz/display_context.h>
-#include <rviz/view_manager.h>
-#include <rviz/display_group.h>
-#include <rviz/display.h>
-#include <rviz/render_panel.h>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/view_manager.hpp>
+#include <rviz_common/display_group.hpp>
+#include <rviz_common/display.hpp>
+#include <rviz_common/render_panel.hpp>
+#include <rviz_common/properties/status_property.hpp>
 #include <QImage>
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QScreen>
 #include <QGuiApplication>
-#endif
-#include <boost/filesystem.hpp>
+#include <filesystem>
+#include <unistd.h>
 
 namespace jsk_rviz_plugins
 {
   VideoCaptureDisplay::VideoCaptureDisplay():
     Display(), capturing_(false), first_time_(true)
   {
-    start_capture_property_ = new rviz::BoolProperty(
+    start_capture_property_ = new rviz_common::properties::BoolProperty(
       "start capture", false, "start capture",
       this, SLOT(updateStartCapture()));
-    file_name_property_ = new rviz::StringProperty(
+    file_name_property_ = new rviz_common::properties::StringProperty(
       "filename", "output.avi",
       "filename", this, SLOT(updateFileName()));
-    fps_property_ = new rviz::FloatProperty(
+    fps_property_ = new rviz_common::properties::FloatProperty(
       "fps", 30.0,
       "fps", this, SLOT(updateFps()));
     fps_property_->setMin(0.1);
-    use_3d_viewer_size_property_ = new rviz::BoolProperty(
+    use_3d_viewer_size_property_ = new rviz_common::properties::BoolProperty(
       "use 3D viewer size", true,
       "Use width and height of 3D viewer for output video or set them manually",
       this, SLOT(updateUse3DViewerSize()));
-    width_property_ = new rviz::IntProperty(
+    width_property_ = new rviz_common::properties::IntProperty(
       "width", 1920,
       "Width of video in pixels", this, SLOT(updateWidth()));
-    height_property_ = new rviz::IntProperty(
+    height_property_ = new rviz_common::properties::IntProperty(
       "height", 1080,
       "Height of video in pixels", this, SLOT(updateHeight()));
   }
@@ -93,7 +90,6 @@ namespace jsk_rviz_plugins
     updateUse3DViewerSize();
     updateWidth();
     updateHeight();
-    //updateStartCapture();
     start_capture_property_->setBool(false); // always false when starting up
     context_->queueRender();
   }
@@ -103,11 +99,11 @@ namespace jsk_rviz_plugins
     start_capture_property_->setBool(false); // always false when starting up
     context_->queueRender();
   }
-  
+
   void VideoCaptureDisplay::updateFileName()
   {
     if (capturing_) {
-      ROS_WARN("cannot change name wile recording");
+      RVIZ_COMMON_LOG_WARNING("cannot change name wile recording");
       file_name_property_->setStdString(file_name_);
     }
     else {
@@ -115,28 +111,28 @@ namespace jsk_rviz_plugins
       int exists_check = access(file_name_.c_str(), F_OK);
       if (exists_check == 0) {
         int access_result = access(file_name_.c_str(), W_OK);
-        ROS_INFO("access_result to %s: %d", file_name_.c_str(), access_result);
+        RVIZ_COMMON_LOG_INFO_STREAM("access_result to " << file_name_ << ": " << access_result);
         if (access_result != 0) {
-          setStatus(rviz::StatusProperty::Error, "File", "NOT Writable");
+          setStatus(rviz_common::properties::StatusProperty::Error, "File", "NOT Writable");
         }
         else {
-          setStatus(rviz::StatusProperty::Ok, "File", "Writable");
+          setStatus(rviz_common::properties::StatusProperty::Ok, "File", "Writable");
         }
       }
       else {                    // do not exists, check directory permission
-        ROS_INFO("%s do not exists", file_name_.c_str());
-        boost::filesystem::path pathname(file_name_);
+        RVIZ_COMMON_LOG_INFO_STREAM(file_name_ << " do not exists");
+        std::filesystem::path pathname(file_name_);
         std::string dirname  = pathname.parent_path().string();
         if (dirname.length() == 0) { // Special case for without path
           dirname = ".";
         }
-        ROS_INFO("dirname: %s", dirname.c_str());
+        RVIZ_COMMON_LOG_INFO_STREAM("dirname: " << dirname);
         int directory_access_result = access(dirname.c_str(), W_OK);
         if (directory_access_result != 0) {
-          setStatus(rviz::StatusProperty::Error, "File", "NOT Writable (direcotry)");
+          setStatus(rviz_common::properties::StatusProperty::Error, "File", "NOT Writable (direcotry)");
         }
         else {
-          setStatus(rviz::StatusProperty::Ok, "File", "Writable");
+          setStatus(rviz_common::properties::StatusProperty::Ok, "File", "Writable");
         }
       }
     }
@@ -144,9 +140,9 @@ namespace jsk_rviz_plugins
 
   void VideoCaptureDisplay::updateStartCapture()
   {
-    ROS_INFO("updateStartCapture");
+    RVIZ_COMMON_LOG_INFO("updateStartCapture");
     if (first_time_) {
-      ROS_WARN("ignore first time capture enabling");
+      RVIZ_COMMON_LOG_WARNING("ignore first time capture enabling");
     }
     else {
       // start capture!
@@ -196,51 +192,49 @@ namespace jsk_rviz_plugins
 
   void VideoCaptureDisplay::startCapture()
   {
-    ROS_INFO("start capturing");
+    RVIZ_COMMON_LOG_INFO("start capturing");
     frame_counter_ = 0;
     if (use_3d_viewer_size_) {
-      rviz::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
+      rviz_common::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
       width_ = panel->width();
       height_ = panel->height();
     }
-    writer_.open(file_name_, CV_FOURCC_DEFAULT, fps_, cv::Size(width_, height_));
+    writer_.open(file_name_, cv::VideoWriter::fourcc('I', 'Y', 'U', 'V'),
+                 fps_, cv::Size(width_, height_));
   }
-  
+
   void VideoCaptureDisplay::stopCapture()
   {
-    ROS_INFO("stop capturing");
+    RVIZ_COMMON_LOG_INFO("stop capturing");
     writer_.release();
     frame_counter_ = 0;
   }
 
-  void VideoCaptureDisplay::update(float wall_dt, float ros_dt)
+  void VideoCaptureDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
   {
     if (first_time_) {
-      ROS_WARN("force to disable capturing");
+      RVIZ_COMMON_LOG_WARNING("force to disable capturing");
       start_capture_property_->setBool(false); // always false when starting up
       first_time_ = false;
       return;
     }
     if (capturing_) {
-      rviz::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+      rviz_common::RenderPanel* panel = context_->getViewManager()->getRenderPanel();
+      // NOTE: grabWindow requires an X11 session; on Wayland run rviz2 with
+      // QT_QPA_PLATFORM=xcb, otherwise the image is empty.
       QPixmap screenshot
-        = QGuiApplication::primaryScreen()->grabWindow(context_->getViewManager()->getRenderPanel()->winId());
-#else
-      QPixmap screenshot
-        = QPixmap::grabWindow(context_->getViewManager()->getRenderPanel()->winId());
-#endif
+        = QGuiApplication::primaryScreen()->grabWindow(panel->winId());
       QImage src = screenshot.toImage().convertToFormat(QImage::Format_RGB888);  // RGB
       cv::Mat image(src.height(), src.width(), CV_8UC3,
                     (uchar*)src.bits(), src.bytesPerLine());  // RGB
       if (image.size().width != width_ || image.size().height != height_) {
         cv::resize(image, image, cv::Size(width_, height_), 0, 0, cv::INTER_LINEAR);
       }
-      cv::cvtColor(image, image, CV_RGB2BGR);  // RGB -> BGR
+      cv::cvtColor(image, image, cv::COLOR_RGB2BGR);  // RGB -> BGR
       writer_ << image;
       ++frame_counter_;
       if (frame_counter_ % 100 == 0) {
-        ROS_INFO("taking %d frames as video", frame_counter_);
+        RVIZ_COMMON_LOG_INFO_STREAM("taking " << frame_counter_ << " frames as video");
       }
     }
     // convert QPixmap into cv::Mat
@@ -248,6 +242,5 @@ namespace jsk_rviz_plugins
 }
 
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::VideoCaptureDisplay, rviz::Display)
-
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::VideoCaptureDisplay, rviz_common::Display)

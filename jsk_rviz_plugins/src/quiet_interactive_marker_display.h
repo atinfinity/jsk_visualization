@@ -36,16 +36,16 @@
 #ifndef JSK_RVIZ_PLUGINS_QUIET_INTERACTIVE_MARKER_H_
 #define JSK_RVIZ_PLUGINS_QUIET_INTERACTIVE_MARKER_H_
 
-#include <rviz/default_plugin/interactive_marker_display.h>
-#include <rviz/properties/status_property.h>
+#include <rviz_default_plugins/displays/interactive_markers/interactive_marker_display.hpp>
+#include <rviz_common/properties/status_property.hpp>
 
 namespace jsk_rviz_plugins
 {
-  class QuietInteractiveMarkerDisplay: public rviz::InteractiveMarkerDisplay
+  class QuietInteractiveMarkerDisplay: public rviz_default_plugins::displays::InteractiveMarkerDisplay
   {
   public:
     QuietInteractiveMarkerDisplay();
-    virtual void setStatus( rviz::StatusProperty::Level level, const QString& name, const QString& text );
+    void setStatus( rviz_common::properties::StatusProperty::Level level, const QString& name, const QString& text ) override;
   protected:
     bool dummy_status_;
   };

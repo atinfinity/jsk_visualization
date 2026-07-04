@@ -211,7 +211,7 @@
     </description>
   </class>
 
-  <!-- Group E: capture and rviz-internal displays (enabled as ported)
+  <!-- Group E: capture and rviz-internal displays -->
   <class name="jsk_rviz_plugin/RvizScenePublisher"
          type="jsk_rviz_plugins::RvizScenePublisher"
          base_class_type="rviz_common::Display">
@@ -233,6 +233,9 @@
       quiet version of interactive marker
     </description>
   </class>
+
+  <!-- OverlayCamera forks the ROS 1 rviz camera display internals, which
+       were fully restructured in rviz2; deferred until rewritten.
   <class name="jsk_rviz_plugin/OverlayCamera"
          type="jsk_rviz_plugins::OverlayCameraDisplay"
          base_class_type="rviz_common::Display">

@@ -72,12 +72,14 @@ set(SOURCE_FILES
   src/robot_command_interface.cpp
   src/cancel_action.cpp
   src/select_point_cloud_publish_action.cpp
+  # Group E: capture and rviz-internal displays
+  src/rviz_scene_publisher.cpp
+  src/video_capture_display.cpp
+  src/quiet_interactive_marker_display.cpp
 )
 
-# Group E: capture and rviz-internal displays (not yet ported)
-# src/rviz_scene_publisher.cpp
-# src/video_capture_display.cpp
-# src/quiet_interactive_marker_display.cpp
+# Deferred: forks the ROS 1 rviz camera display internals, which were fully
+# restructured in rviz2. Needs a rewrite against rviz_default_plugins.
 # src/overlay_camera_display.cpp
 
 if(people_msgs_FOUND)

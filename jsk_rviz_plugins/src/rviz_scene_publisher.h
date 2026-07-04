@@ -37,39 +37,33 @@
 #ifndef JSK_RVIZ_PLUGIN_RVIZ_SCENE_PUBLISHER_H_
 #define JSK_RVIZ_PLUGIN_RVIZ_SCENE_PUBLISHER_H_
 
-#include <rviz/display.h>
-#include <rviz/properties/string_property.h>
-#include <rviz/properties/bool_property.h>
-#include <rviz/properties/float_property.h>
+#include <rviz_common/display.hpp>
+#include <rviz_common/properties/string_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/float_property.hpp>
 #include <opencv2/opencv.hpp>
-#include <image_transport/image_transport.h>
-#include <cv_bridge/cv_bridge.h>
-#include <sensor_msgs/Image.h>
+#include <image_transport/image_transport.hpp>
+#include <cv_bridge/cv_bridge.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
-#include <ros/ros.h>
+#include <memory>
 
 namespace jsk_rviz_plugins
 {
-  class RvizScenePublisher: public rviz::Display
+  class RvizScenePublisher: public rviz_common::Display
   {
     Q_OBJECT
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<RvizScenePublisher> Ptr;
-#else
-    typedef boost::shared_ptr<RvizScenePublisher> Ptr;
-#endif
     RvizScenePublisher();
     virtual ~RvizScenePublisher();
   protected:
-    virtual void onInitialize();
-    virtual void onEnable();
-    virtual void update(float wall_dt, float ros_dt);
-    rviz::StringProperty* topic_name_property_;
+    void onInitialize() override;
+    void onEnable() override;
+    void update(float wall_dt, float ros_dt) override;
+    rviz_common::properties::StringProperty* topic_name_property_;
     std::string topic_name_;
     int image_id_;
-    ros::NodeHandle nh_;
-    image_transport::ImageTransport it_;
     image_transport::Publisher publisher_;
   protected Q_SLOTS:
     void updateTopicName();

@@ -37,46 +37,39 @@
 #ifndef JSK_RVIZ_PLUGIN_VIDEO_CAPTURE_DISPLAY_H_
 #define JSK_RVIZ_PLUGIN_VIDEO_CAPTURE_DISPLAY_H_
 
-#include <rviz/display.h>
-#include <rviz/properties/string_property.h>
-#include <rviz/properties/bool_property.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/properties/int_property.h>
+#include <rviz_common/display.hpp>
+#include <rviz_common/properties/string_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/int_property.hpp>
 #include <opencv2/opencv.hpp>
 
-#include <ros/ros.h>
+#include <memory>
 
 namespace jsk_rviz_plugins
 {
-  class VideoCaptureDisplay: public rviz::Display
+  class VideoCaptureDisplay: public rviz_common::Display
   {
     Q_OBJECT
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
     typedef std::shared_ptr<VideoCaptureDisplay> Ptr;
-#else
-    typedef boost::shared_ptr<VideoCaptureDisplay> Ptr;
-#endif
     VideoCaptureDisplay();
     virtual ~VideoCaptureDisplay();
   protected:
-    virtual void onInitialize();
-    // virtual void subscribe();
-    // virtual void unsubscribe();
-    virtual void onEnable();
-    // virtual void onDisable();
-    virtual void update(float wall_dt, float ros_dt);
+    void onInitialize() override;
+    void onEnable() override;
+    void update(float wall_dt, float ros_dt) override;
     virtual void startCapture();
     virtual void stopCapture();
     ////////////////////////////////////////////////////////
     // Variables
     ////////////////////////////////////////////////////////
-    rviz::StringProperty* file_name_property_;
-    rviz::BoolProperty* start_capture_property_;
-    rviz::FloatProperty* fps_property_;
-    rviz::BoolProperty* use_3d_viewer_size_property_;
-    rviz::IntProperty* width_property_;
-    rviz::IntProperty* height_property_;
+    rviz_common::properties::StringProperty* file_name_property_;
+    rviz_common::properties::BoolProperty* start_capture_property_;
+    rviz_common::properties::FloatProperty* fps_property_;
+    rviz_common::properties::BoolProperty* use_3d_viewer_size_property_;
+    rviz_common::properties::IntProperty* width_property_;
+    rviz_common::properties::IntProperty* height_property_;
     std::string file_name_;
     bool capturing_;
     double fps_;
@@ -94,7 +87,7 @@ namespace jsk_rviz_plugins
     void updateWidth();
     void updateHeight();
   private:
-    
+
   };
 }
 
