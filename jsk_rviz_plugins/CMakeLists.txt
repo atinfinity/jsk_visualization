@@ -19,6 +19,8 @@ find_package(jsk_rviz_plugins_msgs REQUIRED)
 find_package(jsk_recognition_msgs REQUIRED)
 find_package(jsk_footstep_msgs REQUIRED)
 find_package(jsk_hark_msgs REQUIRED)
+find_package(jsk_gui_msgs REQUIRED)
+find_package(view_controller_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -91,6 +93,9 @@ set(SOURCE_FILES
   src/human_skeleton_array_display.cpp
   src/simple_occupancy_grid_array_display.cpp
   src/polygon_array_display.cpp
+  src/yes_no_button_interface.cpp
+  src/tablet_controller_panel.cpp
+  src/view_controller/tablet_view_controller.cpp
 )
 
 # Deferred: forks the ROS 1 rviz camera display internals, which were fully
@@ -124,6 +129,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   ${jsk_recognition_msgs_TARGETS}
   ${jsk_footstep_msgs_TARGETS}
   ${jsk_hark_msgs_TARGETS}
+  ${jsk_gui_msgs_TARGETS}
+  ${view_controller_msgs_TARGETS}
   ${std_msgs_TARGETS}
   ${std_srvs_TARGETS}
   ${geometry_msgs_TARGETS}
@@ -163,6 +170,7 @@ install(PROGRAMS
   scripts/tf_diff_text.py
   scripts/twist_stamped_add_header.py
   scripts/classification_result_visualizer.py
+  scripts/rviz_mouse_point_to_tablet.py
   samples/bounding_box_sample.py
   samples/diagnostics_sample.py
   samples/footstep_sample.py
@@ -194,6 +202,7 @@ ament_export_libraries(${PROJECT_NAME})
 ament_export_dependencies(
   rclcpp rviz_common rviz_rendering rviz_default_plugins rviz_ogre_vendor
   jsk_rviz_plugins_msgs jsk_recognition_msgs jsk_footstep_msgs jsk_hark_msgs
+  jsk_gui_msgs view_controller_msgs
   std_msgs std_srvs geometry_msgs sensor_msgs
   diagnostic_msgs action_msgs cv_bridge image_geometry image_transport
   interactive_markers message_filters tf2_ros)

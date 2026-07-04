@@ -2,46 +2,45 @@
 #define YES_NO_BUTTON_INTERFACE_H
 
 #ifndef Q_MOC_RUN
-#include <ros/ros.h>
-#include <rviz/panel.h>
-#include <boost/thread.hpp>
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-#  include <QtWidgets>
-#else
-#  include <QtGui>
-#endif
+#include <rviz_common/panel.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <QtWidgets>
+#include <atomic>
+#include <mutex>
 #endif
 
-#include <jsk_gui_msgs/YesNo.h>
+#include <jsk_gui_msgs/srv/yes_no.hpp>
 
 
 namespace jsk_rviz_plugins
 {
 
-  class YesNoButtonInterface: public rviz::Panel
+  class YesNoButtonInterface: public rviz_common::Panel
   {
   Q_OBJECT
   public:
     YesNoButtonInterface(QWidget* parent = 0);
 
-    virtual void onInitialize();
-    virtual void load(const rviz::Config& config);
-    virtual void save(rviz::Config config) const;
+    void onInitialize() override;
+    void load(const rviz_common::Config& config) override;
+    void save(rviz_common::Config config) const override;
 
   protected Q_SLOTS:
     void respondYes();
     void respondNo();
+    void enableButtons();
+    void disableButtons();
   protected:
-    virtual bool requested(
-      jsk_gui_msgs::YesNo::Request& req,
-      jsk_gui_msgs::YesNo::Response& res);
+    virtual void requested(
+      const jsk_gui_msgs::srv::YesNo::Request::SharedPtr req,
+      jsk_gui_msgs::srv::YesNo::Response::SharedPtr res);
     QHBoxLayout* layout_;
     QPushButton* yes_button_;
     QPushButton* no_button_;
     bool yes_;
-    bool need_user_input_;
-    boost::mutex mutex_;
-    ros::ServiceServer yes_no_button_service_;
+    std::atomic<bool> need_user_input_;
+    std::mutex mutex_;
+    rclcpp::Service<jsk_gui_msgs::srv::YesNo>::SharedPtr yes_no_button_service_;
   };
 
 }  // namespace jsk_rviz_plugins

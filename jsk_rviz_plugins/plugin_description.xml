@@ -311,9 +311,26 @@
     </description>
   </class>
 
-  <!-- Still deferred (no ROS 2 message packages):
-       YesNoButton (jsk_gui_msgs),
-       TabletControllerPanel + TabletViewController (view_controller_msgs)
-  -->
+  <class name="jsk_rviz_plugin/YesNoButton"
+         type="jsk_rviz_plugins::YesNoButtonInterface"
+         base_class_type="rviz_common::Panel">
+    <description>
+      A panel widget for yes/no button
+    </description>
+  </class>
+  <class name="jsk_rviz_plugin/TabletViewController"
+         type="jsk_rviz_plugins::TabletViewController"
+         base_class_type="rviz_common::ViewController">
+    <description>
+      A view controller for tablet
+    </description>
+  </class>
+  <class name="jsk_rviz_plugin/TabletControllerPanel"
+         type="jsk_rviz_plugins::TabletControllerPanel"
+         base_class_type="rviz_common::Panel">
+    <description>
+      tablet controller panel
+    </description>
+  </class>
 
 </library>

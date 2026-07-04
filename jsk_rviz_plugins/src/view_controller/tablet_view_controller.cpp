@@ -32,39 +32,38 @@
 
 #include "tablet_view_controller.h"
 
-#include "rviz/load_resource.h"
-#include "rviz/uniform_string_stream.h"
-#include "rviz/display_context.h"
-#include "rviz/viewport_mouse_event.h"
-#include "rviz/frame_manager.h"
-#include "rviz/geometry.h"
-#include "rviz/ogre_helpers/shape.h"
-#include "rviz/properties/float_property.h"
-#include "rviz/properties/vector_property.h"
-#include "rviz/properties/bool_property.h"
-#include "rviz/properties/tf_frame_property.h"
-#include "rviz/properties/editable_enum_property.h"
-#include "rviz/properties/ros_topic_property.h"
+#include <rviz_common/load_resource.hpp>
+#include <rviz_common/uniform_string_stream.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/viewport_mouse_event.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/logging.hpp>
+#include <rviz_rendering/objects/shape.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/vector_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/tf_frame_property.hpp>
+#include <rviz_common/properties/editable_enum_property.hpp>
+#include <rviz_common/properties/ros_topic_property.hpp>
 
-#include "view_controller_msgs/CameraPlacement.h"
-#include "geometry_msgs/PointStamped.h"
+#include <view_controller_msgs/msg/camera_placement.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 
-#include <OGRE/OgreViewport.h>
-#include <OGRE/OgreQuaternion.h>
-#include <OGRE/OgreVector3.h>
-#include <OGRE/OgreSceneNode.h>
-#include <OGRE/OgreSceneManager.h>
-#include <OGRE/OgreCamera.h>
+#include <OgreViewport.h>
+#include <OgreQuaternion.h>
+#include <OgreVector.h>
+#include <OgreSceneNode.h>
+#include <OgreSceneManager.h>
+#include <OgreCamera.h>
 
-#include <rviz/render_panel.h>
-#include <rviz/view_manager.h>
-#include <rviz/ogre_helpers/render_widget.h>
-#include <OGRE/OgreRenderWindow.h>
+#include <rviz_common/render_panel.hpp>
+#include <rviz_common/view_manager.hpp>
 
 namespace jsk_rviz_plugins
 {
 using namespace view_controller_msgs;
-using namespace rviz;
+using namespace rviz_common;
+using namespace rviz_common::properties;
 
 // Strings for selecting control mode styles
 static const std::string MODE_ORBIT = "Orbit";
@@ -78,31 +77,32 @@ static const Ogre::Radian PITCH_LIMIT_HIGH = Ogre::Radian( Ogre::Math::PI - 0.02
 
 
 // Some convenience functions for Ogre / geometry_msgs conversions
-static inline Ogre::Vector3 vectorFromMsg(const geometry_msgs::Point &m) { return Ogre::Vector3(m.x, m.y, m.z); }
-static inline Ogre::Vector3 vectorFromMsg(const geometry_msgs::Vector3 &m) { return Ogre::Vector3(m.x, m.y, m.z); }
-static inline geometry_msgs::Point pointOgreToMsg(const Ogre::Vector3 &o)
+static inline Ogre::Vector3 vectorFromMsg(const geometry_msgs::msg::Point &m) { return Ogre::Vector3(m.x, m.y, m.z); }
+static inline Ogre::Vector3 vectorFromMsg(const geometry_msgs::msg::Vector3 &m) { return Ogre::Vector3(m.x, m.y, m.z); }
+static inline geometry_msgs::msg::Point pointOgreToMsg(const Ogre::Vector3 &o)
 {
-  geometry_msgs::Point m;
+  geometry_msgs::msg::Point m;
   m.x = o.x; m.y = o.y; m.z = o.z;
   return m;
 }
-static inline void pointOgreToMsg(const Ogre::Vector3 &o, geometry_msgs::Point &m)  { m.x = o.x; m.y = o.y; m.z = o.z; }
+static inline void pointOgreToMsg(const Ogre::Vector3 &o, geometry_msgs::msg::Point &m)  { m.x = o.x; m.y = o.y; m.z = o.z; }
 
-static inline geometry_msgs::Vector3 vectorOgreToMsg(const Ogre::Vector3 &o)
+static inline geometry_msgs::msg::Vector3 vectorOgreToMsg(const Ogre::Vector3 &o)
 {
-  geometry_msgs::Vector3 m;
+  geometry_msgs::msg::Vector3 m;
   m.x = o.x; m.y = o.y; m.z = o.z;
   return m;
 }
-static inline void vectorOgreToMsg(const Ogre::Vector3 &o, geometry_msgs::Vector3 &m) { m.x = o.x; m.y = o.y; m.z = o.z; }
+static inline void vectorOgreToMsg(const Ogre::Vector3 &o, geometry_msgs::msg::Vector3 &m) { m.x = o.x; m.y = o.y; m.z = o.z; }
 
 // -----------------------------------------------------------------------------
 
 
 TabletViewController::TabletViewController()
-  : nh_(""), animate_(false), dragging_( false )
+  : attached_scene_node_(NULL), animate_(false), current_transition_duration_(0),
+    focal_shape_(NULL), dragging_( false )
 {
-  interaction_disabled_cursor_ = makeIconCursor( "package://rviz/icons/forbidden.svg" );
+  interaction_disabled_cursor_ = makeIconCursor( "package://rviz_common/icons/forbidden.svg" );
 
   mouse_enabled_property_ = new BoolProperty("Mouse Enabled", true,
                                    "Enables mouse control of the camera.",
@@ -135,58 +135,62 @@ TabletViewController::TabletViewController()
                                                          "The default time to use for camera transitions.",
                                                          this );
   camera_placement_topic_property_ = new RosTopicProperty("Placement Topic", "/rviz/camera_placement",
-                                                          QString::fromStdString(ros::message_traits::datatype<view_controller_msgs::CameraPlacement>() ),
+                                                          QString::fromStdString(rosidl_generator_traits::name<view_controller_msgs::msg::CameraPlacement>() ),
                                                           "Topic for CameraPlacement messages", this, SLOT(updateTopics()));
-  
+
   camera_placement_publish_topic_property_ = new RosTopicProperty("Placement Publish Topic", "/rviz/current_camera_placement",
-                                                          QString::fromStdString(ros::message_traits::datatype<view_controller_msgs::CameraPlacement>() ),
+                                                          QString::fromStdString(rosidl_generator_traits::name<view_controller_msgs::msg::CameraPlacement>() ),
                                                           "Publishing Topic for CameraPlacement messages", this, SLOT(updatePublishTopics()));
 
   mouse_point_publish_topic_property_ = new RosTopicProperty("Placement Mouse Point", "/rviz/current_mouse_point",
-                                                             QString::fromStdString(ros::message_traits::datatype<geometry_msgs::PointStamped>() ),
+                                                             QString::fromStdString(rosidl_generator_traits::name<geometry_msgs::msg::PointStamped>() ),
                                                              "Publishing position of mouse", this, SLOT(updateMousePointPublishTopics()));
 
 //  camera_placement_trajectory_topic_property_ = new RosTopicProperty("Trajectory Topic", "/rviz/camera_placement_trajectory",
-//                                                          QString::fromStdString(ros::message_traits::datatype<view_controller_msgs::CameraPlacementTrajectory>() ),
+//                                                          QString::fromStdString(rosidl_generator_traits::name<view_controller_msgs::msg::CameraPlacementTrajectory>() ),
 //                                                          "Topic for CameraPlacementTrajectory messages", this, SLOT(updateTopics()));
 }
 
 TabletViewController::~TabletViewController()
 {
     delete focal_shape_;
-    context_->getSceneManager()->destroySceneNode( attached_scene_node_ );
+    if ( attached_scene_node_ && context_ )
+      context_->getSceneManager()->destroySceneNode( attached_scene_node_ );
 }
 
 void TabletViewController::updatePublishTopics()
 {
-  placement_publisher_ = nh_.advertise<view_controller_msgs::CameraPlacement>
-    (camera_placement_publish_topic_property_->getStdString(), 1);
+  if ( !nh_ ) return;
+  placement_publisher_ = nh_->create_publisher<view_controller_msgs::msg::CameraPlacement>
+    (camera_placement_publish_topic_property_->getTopicStd(), 1);
 }
 
 void TabletViewController::updateMousePointPublishTopics()
 {
-  mouse_point_publisher_ = nh_.advertise<geometry_msgs::PointStamped>
-    (mouse_point_publish_topic_property_->getStdString(), 1);
+  if ( !nh_ ) return;
+  mouse_point_publisher_ = nh_->create_publisher<geometry_msgs::msg::PointStamped>
+    (mouse_point_publish_topic_property_->getTopicStd(), 1);
 }
 
-void TabletViewController::publishMouseEvent(rviz::ViewportMouseEvent& event)
+void TabletViewController::publishMouseEvent(rviz_common::ViewportMouseEvent& event)
 {
-  geometry_msgs::PointStamped msg;
+  if ( !mouse_point_publisher_ ) return;
+  geometry_msgs::msg::PointStamped msg;
   msg.header.frame_id = context_->getFixedFrame().toStdString();
-  msg.header.stamp = ros::Time::now();
-  rviz::ViewManager* manager = context_->getViewManager();
-  rviz::RenderPanel* panel = manager->getRenderPanel();
-  Ogre::RenderWindow* window = panel->getRenderWindow();
-  msg.point.x = (double)event.x / window->getWidth();
-  msg.point.y = (double)event.y / window->getHeight();
+  msg.header.stamp = nh_->now();
+  rviz_common::ViewManager* manager = context_->getViewManager();
+  rviz_common::RenderPanel* panel = manager->getRenderPanel();
+  msg.point.x = (double)event.x / panel->width();
+  msg.point.y = (double)event.y / panel->height();
   msg.point.z = 0;
-  mouse_point_publisher_.publish(msg);
+  mouse_point_publisher_->publish(msg);
 }
-  
+
 void TabletViewController::publishCurrentPlacement()
 {
-  view_controller_msgs::CameraPlacement msg;
-  ros::Time now = ros::Time::now();
+  if ( !placement_publisher_ ) return;
+  view_controller_msgs::msg::CameraPlacement msg;
+  rclcpp::Time now = nh_->now();
   msg.target_frame = attached_frame_property_->getFrameStd();
   std::string fixed_frame = context_->getFixedFrame().toStdString();
   // eye
@@ -211,21 +215,27 @@ void TabletViewController::publishCurrentPlacement()
   msg.up.vector.y = up[1];
   msg.up.vector.z = up[2];
 
-  placement_publisher_.publish(msg);
+  placement_publisher_->publish(msg);
 }
-  
+
 void TabletViewController::updateTopics()
 {
+  if ( !nh_ ) return;
 //  trajectory_subscriber_ = nh_.subscribe<view_controller_msgs::CameraPlacementTrajectory>
 //                              (camera_placement_trajectory_topic_property_->getStdString(), 1,
 //                              boost::bind(&TabletViewController::cameraPlacementTrajectoryCallback, this, _1));
-  placement_subscriber_  = nh_.subscribe<view_controller_msgs::CameraPlacement>
-                              (camera_placement_topic_property_->getStdString(), 1,
-                              boost::bind(&TabletViewController::cameraPlacementCallback, this, _1));
+  placement_subscriber_  = nh_->create_subscription<view_controller_msgs::msg::CameraPlacement>
+                              (camera_placement_topic_property_->getTopicStd(), 1,
+                               std::bind(&TabletViewController::cameraPlacementCallback, this, std::placeholders::_1));
 }
 
 void TabletViewController::onInitialize()
 {
+    nh_ = context_->getRosNodeAbstraction().lock()->get_raw_node();
+    camera_placement_topic_property_->initialize( context_->getRosNodeAbstraction() );
+    camera_placement_publish_topic_property_->initialize( context_->getRosNodeAbstraction() );
+    mouse_point_publish_topic_property_->initialize( context_->getRosNodeAbstraction() );
+
     attached_frame_property_->setFrameManager( context_->getFrameManager() );
     attached_scene_node_ = context_->getSceneManager()->getRootSceneNode()->createChildSceneNode();
     camera_->detachFromParent();
@@ -233,7 +243,8 @@ void TabletViewController::onInitialize()
 
     camera_->setProjectionType( Ogre::PT_PERSPECTIVE );
 
-    focal_shape_ = new Shape(Shape::Sphere, context_->getSceneManager(), attached_scene_node_);
+    focal_shape_ = new rviz_rendering::Shape(rviz_rendering::Shape::Sphere,
+                                             context_->getSceneManager(), attached_scene_node_);
     focal_shape_->setScale(Ogre::Vector3(0.05f, 0.05f, 0.01f));
     focal_shape_->setColor(1.0f, 1.0f, 0.0f, 0.5f);
     focal_shape_->getRootNode()->setVisible(false);
@@ -327,7 +338,7 @@ void TabletViewController::updateAttachedSceneNode()
   Ogre::Quaternion new_reference_orientation;
 
   bool queue = false;
-  if( context_->getFrameManager()->getTransform( attached_frame_property_->getFrameStd(), ros::Time(),
+  if( context_->getFrameManager()->getTransform( attached_frame_property_->getFrameStd(),
                                                  new_reference_position, new_reference_orientation ))
   {
     attached_scene_node_->setPosition( new_reference_position );
@@ -549,7 +560,7 @@ void TabletViewController::mimic( ViewController* source_view )
     Ogre::Vector3 position = source_camera->getPosition();
     Ogre::Quaternion orientation = source_camera->getOrientation();
 
-    if( source_view->getClassId() == "rviz/Orbit" )
+    if( source_view->getClassId() == "rviz_default_plugins/Orbit" )
     {
         distance_property_->setFloat( source_view->subProp( "Distance" )->getValue().toFloat() );
     }
@@ -578,14 +589,14 @@ void TabletViewController::transitionFrom( ViewController* previous_view )
     focus_point_property_->setVector(fvc->focus_point_property_->getVector());
     up_vector_property_->setVector(fvc->up_vector_property_->getVector());
 
-    beginNewTransition(new_eye, new_focus, new_up, ros::Duration(default_transition_time_property_->getFloat()));
+    beginNewTransition(new_eye, new_focus, new_up, default_transition_time_property_->getFloat());
   }
 }
 
 void TabletViewController::beginNewTransition(const Ogre::Vector3 &eye, const Ogre::Vector3 &focus, const Ogre::Vector3 &up,
-                                            const ros::Duration &transition_time)
+                                            const double transition_time)
 {
-  if(ros::Duration(transition_time).isZero())
+  if(transition_time < 1e-6)
   {
     eye_point_property_->setVector(eye);
     focus_point_property_->setVector(focus);
@@ -605,8 +616,8 @@ void TabletViewController::beginNewTransition(const Ogre::Vector3 &eye, const Og
   start_up_ = up_vector_property_->getVector();
   goal_up_ =  up;
 
-  current_transition_duration_ = ros::Duration(transition_time);
-  transition_start_time_ = ros::Time::now();
+  current_transition_duration_ = transition_time;
+  transition_start_time_ = std::chrono::steady_clock::now();
 
   animate_ = true;
 }
@@ -616,9 +627,9 @@ void TabletViewController::cancelTransition()
   animate_ = false;
 }
 
-void TabletViewController::cameraPlacementCallback(const CameraPlacementConstPtr &cp_ptr)
+void TabletViewController::cameraPlacementCallback(const view_controller_msgs::msg::CameraPlacement::ConstSharedPtr cp_ptr)
 {
-  CameraPlacement cp = *cp_ptr;
+  view_controller_msgs::msg::CameraPlacement cp = *cp_ptr;
 
   // Handle control parameters
   mouse_enabled_property_->setBool( !cp.interaction_disabled );
@@ -637,17 +648,16 @@ void TabletViewController::cameraPlacementCallback(const CameraPlacementConstPtr
     updateAttachedFrame();
   }
 
-  if(cp.time_from_start.toSec() >= 0)
+  if(rclcpp::Duration(cp.time_from_start).seconds() >= 0)
   {
-    ROS_DEBUG_STREAM("Received a camera placement request! \n" << cp);
+    RVIZ_COMMON_LOG_DEBUG("Received a camera placement request!");
     transformCameraPlacementToAttachedFrame(cp);
-    ROS_DEBUG_STREAM("After transform, we have \n" << cp);
 
     Ogre::Vector3 eye = vectorFromMsg(cp.eye.point);
     Ogre::Vector3 focus = vectorFromMsg(cp.focus.point);
     Ogre::Vector3 up = vectorFromMsg(cp.up.vector);
 
-    beginNewTransition(eye, focus, up, cp.time_from_start);
+    beginNewTransition(eye, focus, up, rclcpp::Duration(cp.time_from_start).seconds());
   }
 }
 
@@ -655,7 +665,7 @@ void TabletViewController::cameraPlacementCallback(const CameraPlacementConstPtr
 //{
 //  CameraPlacementTrajectory cpt = *cptptr;
 //  ROS_DEBUG_STREAM("Received a camera placement trajectory request! \n" << cpt);
-  
+//
 //  // Handle control parameters
 //  mouse_enabled_property_->setBool( cpt.interaction_enabled );
 //  fixed_up_property_->setBool( !cpt.allow_free_yaw_axis );
@@ -666,13 +676,13 @@ void TabletViewController::cameraPlacementCallback(const CameraPlacementConstPtr
 //    else if(cpt.mouse_interaction_mode == cpt.FPS) name = MODE_FPS;
 //    interaction_mode_property_->setStdString(name);
 //  }
-
+//
 //  // TODO should transform the interpolated positions (later), or transform info will only reflect the TF tree state at the beginning...
 //  for(size_t i = 0; i<cpt.placements.size(); i++)
 //  {
 //    transformCameraPlacementToAttachedFrame(cpt.placements[i]);
 //  }
-
+//
 //  // For now, just transition to the first placement until we put in the capacity for a trajectory
 //  CameraPlacement cp = cpt.placements[0];
 //  if(cp.target_frame != "")
@@ -683,23 +693,23 @@ void TabletViewController::cameraPlacementCallback(const CameraPlacementConstPtr
 //  Ogre::Vector3 eye = vectorFromMsg(cp.eye.point);
 //  Ogre::Vector3 focus = vectorFromMsg(cp.focus.point);
 //  Ogre::Vector3 up = vectorFromMsg(cp.up.vector);
-
+//
 //  beginNewTransition(eye, focus, up, cp.time_from_start);
 //}
 
-void TabletViewController::transformCameraPlacementToAttachedFrame(CameraPlacement &cp)
+void TabletViewController::transformCameraPlacementToAttachedFrame(view_controller_msgs::msg::CameraPlacement &cp)
 {
   Ogre::Vector3 position_fixed_eye, position_fixed_focus, position_fixed_up; // position_fixed_attached;
   Ogre::Quaternion rotation_fixed_eye, rotation_fixed_focus, rotation_fixed_up; // rotation_fixed_attached;
 
-  context_->getFrameManager()->getTransform(cp.eye.header.frame_id, ros::Time(0), position_fixed_eye, rotation_fixed_eye);
-  context_->getFrameManager()->getTransform(cp.focus.header.frame_id,  ros::Time(0), position_fixed_focus, rotation_fixed_focus);
-  context_->getFrameManager()->getTransform(cp.up.header.frame_id,  ros::Time(0), position_fixed_up, rotation_fixed_up);
-  //context_->getFrameManager()->getTransform(attached_frame_property_->getStdString(),  ros::Time(0), position_fixed_attached, rotation_fixed_attached);
+  context_->getFrameManager()->getTransform(cp.eye.header.frame_id, position_fixed_eye, rotation_fixed_eye);
+  context_->getFrameManager()->getTransform(cp.focus.header.frame_id, position_fixed_focus, rotation_fixed_focus);
+  context_->getFrameManager()->getTransform(cp.up.header.frame_id, position_fixed_up, rotation_fixed_up);
+  //context_->getFrameManager()->getTransform(attached_frame_property_->getStdString(), position_fixed_attached, rotation_fixed_attached);
 
-  Ogre::Vector3 eye = vectorFromMsg(cp.eye.point); 
-  Ogre::Vector3 focus = vectorFromMsg(cp.focus.point); 
-  Ogre::Vector3 up = vectorFromMsg(cp.up.vector); 
+  Ogre::Vector3 eye = vectorFromMsg(cp.eye.point);
+  Ogre::Vector3 focus = vectorFromMsg(cp.focus.point);
+  Ogre::Vector3 up = vectorFromMsg(cp.up.vector);
 
   eye = fixedFrameToAttachedLocal(position_fixed_eye + rotation_fixed_eye*eye);
   focus = fixedFrameToAttachedLocal(position_fixed_focus + rotation_fixed_focus*focus);
@@ -724,7 +734,7 @@ void TabletViewController::lookAt( const Ogre::Vector3& point )
 
   beginNewTransition(eye_point_property_->getVector(), new_point,
                      up_vector_property_->getVector(),
-                     ros::Duration(default_transition_time_property_->getFloat()));
+                     default_transition_time_property_->getFloat());
 
   //  // Just for easily testing the other movement styles:
   //  orbitCameraTo(point);
@@ -735,14 +745,14 @@ void TabletViewController::orbitCameraTo( const Ogre::Vector3& point)
 {
   beginNewTransition(point, focus_point_property_->getVector(),
                      up_vector_property_->getVector(),
-                     ros::Duration(default_transition_time_property_->getFloat()));
+                     default_transition_time_property_->getFloat());
 }
 
 void TabletViewController::moveEyeWithFocusTo( const Ogre::Vector3& point)
 {
   beginNewTransition(point, focus_point_property_->getVector() + (point - eye_point_property_->getVector()),
                      up_vector_property_->getVector(),
-                     ros::Duration(default_transition_time_property_->getFloat()));
+                     default_transition_time_property_->getFloat());
 }
 
 
@@ -752,8 +762,9 @@ void TabletViewController::update(float dt, float ros_dt)
 
   if(animate_)
   {
-    ros::Duration time_from_start = ros::Time::now() - transition_start_time_;
-    float fraction = time_from_start.toSec()/current_transition_duration_.toSec();
+    double time_from_start =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - transition_start_time_).count();
+    float fraction = time_from_start/current_transition_duration_;
     // make sure we get all the way there before turning off
     if(fraction > 1.0f)
     {
@@ -855,7 +866,7 @@ void TabletViewController::move_eye( float x, float y, float z )
   distance_property_->setFloat(getDistanceFromCameraToFocalPoint());
 }
 
-} // end namespace rviz
+} // end namespace jsk_rviz_plugins
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::TabletViewController, rviz::ViewController )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::TabletViewController, rviz_common::ViewController )
