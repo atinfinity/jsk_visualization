@@ -32,16 +32,20 @@
 //#include <interactive_marker_helpers/interactive_marker_helpers.h>
 #include <jsk_interactive_marker/interactive_marker_helpers.h>
 
-#include <tf/tf.h>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Vector3.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 // #include <object_manipulator/tools/msg_helpers.h>
 
 namespace im_helpers {
 
-geometry_msgs::Pose createPoseMsg(const tf::Transform &transform)
+geometry_msgs::msg::Pose createPoseMsg(const tf2::Transform &transform)
 {
-  geometry_msgs::Pose pose;
-  tf::Vector3 pos = transform.getOrigin();
-  tf::Quaternion rot = transform.getRotation();
+  geometry_msgs::msg::Pose pose;
+  tf2::Vector3 pos = transform.getOrigin();
+  tf2::Quaternion rot = transform.getRotation();
   pose.position.x = pos[0];
   pose.position.y = pos[1];
   pose.position.z = pos[2];
@@ -52,20 +56,20 @@ geometry_msgs::Pose createPoseMsg(const tf::Transform &transform)
   return pose;
 }
   
-visualization_msgs::InteractiveMarker makeEmptyMarker( const char *frame_id )
+visualization_msgs::msg::InteractiveMarker makeEmptyMarker( const char *frame_id )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header.frame_id = frame_id;
   int_marker.scale = 1;
 
   return int_marker;
 }
 
-visualization_msgs::Marker makeBox( float scale )
+visualization_msgs::msg::Marker makeBox( float scale )
 {
-  visualization_msgs::Marker marker;
+  visualization_msgs::msg::Marker marker;
 
-  marker.type = visualization_msgs::Marker::CUBE;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = scale;
   marker.scale.y = scale;
   marker.scale.z = scale;
@@ -77,11 +81,11 @@ visualization_msgs::Marker makeBox( float scale )
   return marker;
 }
 
-visualization_msgs::Marker makeSphere( float scale )
+visualization_msgs::msg::Marker makeSphere( float scale )
 {
-  visualization_msgs::Marker marker;
+  visualization_msgs::msg::Marker marker;
 
-  marker.type = visualization_msgs::Marker::SPHERE;
+  marker.type = visualization_msgs::msg::Marker::SPHERE;
   marker.scale.x = scale;
   marker.scale.y = scale;
   marker.scale.z = scale;
@@ -93,119 +97,119 @@ visualization_msgs::Marker makeSphere( float scale )
   return marker;
 }
 
-void add3Dof2DControl( visualization_msgs::InteractiveMarker &msg, bool fixed)
+void add3Dof2DControl( visualization_msgs::msg::InteractiveMarker &msg, bool fixed)
 {
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
   if(fixed)
-    control.orientation_mode = visualization_msgs::InteractiveMarkerControl::FIXED;
+    control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::FIXED;
 
   control.orientation.w = 1;
   control.orientation.x = 1;
   control.orientation.y = 0;
   control.orientation.z = 0;
-  // control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  // control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   // msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 1;
   control.orientation.z = 0;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  // control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  // control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   // msg.controls.push_back(control);
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 0;
   control.orientation.z = 1;
-  // control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  // control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   // msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 
 }
 
-void add6DofControl( visualization_msgs::InteractiveMarker &msg, bool fixed)
+void add6DofControl( visualization_msgs::msg::InteractiveMarker &msg, bool fixed)
 {
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
   if(fixed)
-    control.orientation_mode = visualization_msgs::InteractiveMarkerControl::FIXED;
+    control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::FIXED;
 
   control.orientation.w = 1;
   control.orientation.x = 1;
   control.orientation.y = 0;
   control.orientation.z = 0;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 1;
   control.orientation.z = 0;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 0;
   control.orientation.z = 1;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 }
 
-  void addVisible6DofControl( visualization_msgs::InteractiveMarker &msg, bool fixed, bool visible)
+  void addVisible6DofControl( visualization_msgs::msg::InteractiveMarker &msg, bool fixed, bool visible)
   {
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
   
   if(visible)
     control.always_visible = true;
 
   if(fixed)
-    control.orientation_mode = visualization_msgs::InteractiveMarkerControl::FIXED;
+    control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::FIXED;
 
   control.orientation.w = 1;
   control.orientation.x = 1;
   control.orientation.y = 0;
   control.orientation.z = 0;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 1;
   control.orientation.z = 0;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 0;
   control.orientation.z = 1;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   msg.controls.push_back(control);
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   msg.controls.push_back(control);
 }
 
 
-visualization_msgs::InteractiveMarkerControl& makeBoxControl( visualization_msgs::InteractiveMarker &msg )
+visualization_msgs::msg::InteractiveMarkerControl& makeBoxControl( visualization_msgs::msg::InteractiveMarker &msg )
 {
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
   control.always_visible = true;
   control.markers.push_back( makeBox(msg.scale) );
   msg.controls.push_back( control );
@@ -213,9 +217,9 @@ visualization_msgs::InteractiveMarkerControl& makeBoxControl( visualization_msgs
   return msg.controls.back();
 }
 
-visualization_msgs::InteractiveMarkerControl& makeSphereControl( visualization_msgs::InteractiveMarker &msg )
+visualization_msgs::msg::InteractiveMarkerControl& makeSphereControl( visualization_msgs::msg::InteractiveMarker &msg )
 {
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
   control.always_visible = true;
   control.markers.push_back( makeSphere(msg.scale) );
   msg.controls.push_back( control );
@@ -223,52 +227,52 @@ visualization_msgs::InteractiveMarkerControl& makeSphereControl( visualization_m
   return msg.controls.back();
 }
 
-visualization_msgs::MenuEntry makeMenuEntry(const char *title)
+visualization_msgs::msg::MenuEntry makeMenuEntry(const char *title)
 {
-  visualization_msgs::MenuEntry m;
+  visualization_msgs::msg::MenuEntry m;
   m.title = title;
   m.command = title;
   return m;
 }
 
-visualization_msgs::MenuEntry makeMenuEntry(const char *title, const char *command, int type  )
+visualization_msgs::msg::MenuEntry makeMenuEntry(const char *title, const char *command, int type  )
 {
-  visualization_msgs::MenuEntry m;
+  visualization_msgs::msg::MenuEntry m;
   m.title = title;
   m.command = command;
   m.command_type = type;
   return m;
 }
 
-visualization_msgs::InteractiveMarker makePostureMarker( const char *name, const geometry_msgs::PoseStamped &stamped,
+visualization_msgs::msg::InteractiveMarker makePostureMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
                                                          float scale, bool fixed, bool view_facing )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
   control.orientation.w = 1;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   int_marker.controls.push_back(control);
 
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeHeadGoalMarker( const char *name, const geometry_msgs::PoseStamped &stamped,
+visualization_msgs::msg::InteractiveMarker makeHeadGoalMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
                                                           float scale)
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
-  control.orientation_mode = visualization_msgs::InteractiveMarkerControl::VIEW_FACING;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_PLANE;
+  visualization_msgs::msg::InteractiveMarkerControl control;
+  control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::VIEW_FACING;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_PLANE;
   control.orientation.w = 1;
   control.markers.push_back( makeSphere(scale*0.7) );
   int_marker.controls.push_back(control);
@@ -279,102 +283,102 @@ visualization_msgs::InteractiveMarker makeHeadGoalMarker( const char *name, cons
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeMeshMarker( const std::string &name, const std::string &mesh_resource,
-                                                      const geometry_msgs::PoseStamped &stamped, float scale, const std_msgs::ColorRGBA &color, bool use_color )
+visualization_msgs::msg::InteractiveMarker makeMeshMarker( const std::string &name, const std::string &mesh_resource,
+                                                      const geometry_msgs::msg::PoseStamped &stamped, float scale, const std_msgs::msg::ColorRGBA &color, bool use_color )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.pose = stamped.pose;
   int_marker.name = name;
   int_marker.scale = scale;
 
-  visualization_msgs::Marker mesh;
+  visualization_msgs::msg::Marker mesh;
   if (use_color) mesh.color = color;
   mesh.mesh_resource = mesh_resource;
   mesh.mesh_use_embedded_materials = !use_color;
-  mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+  mesh.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
   mesh.scale.x = scale;
   mesh.scale.y = scale;
   mesh.scale.z = scale;
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
   control.markers.push_back( mesh );
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
   int_marker.controls.push_back( control );
 
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeMeshMarker( const std::string &name, const std::string &mesh_resource,
-                                                      const geometry_msgs::PoseStamped &stamped, float scale)
+visualization_msgs::msg::InteractiveMarker makeMeshMarker( const std::string &name, const std::string &mesh_resource,
+                                                      const geometry_msgs::msg::PoseStamped &stamped, float scale)
 {
-  std_msgs::ColorRGBA color;
+  std_msgs::msg::ColorRGBA color;
   return makeMeshMarker( name, mesh_resource, stamped, scale, color, false);
 }
 
-visualization_msgs::InteractiveMarker makeMeshMarker( const std::string &name, const std::string &mesh_resource,
-                                                      const geometry_msgs::PoseStamped &stamped, float scale, const std_msgs::ColorRGBA &color)
+visualization_msgs::msg::InteractiveMarker makeMeshMarker( const std::string &name, const std::string &mesh_resource,
+                                                      const geometry_msgs::msg::PoseStamped &stamped, float scale, const std_msgs::msg::ColorRGBA &color)
 {
   return makeMeshMarker( name, mesh_resource, stamped, scale, color, true);
 }
 
-visualization_msgs::InteractiveMarker makeButtonBox( const char *name, const geometry_msgs::PoseStamped &stamped, float scale, bool fixed, bool view_facing )
+visualization_msgs::msg::InteractiveMarker makeButtonBox( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed, bool view_facing )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
   //int_marker.description = "This is the marker.";
 
-  visualization_msgs::InteractiveMarkerControl &control = makeBoxControl(int_marker);
+  visualization_msgs::msg::InteractiveMarkerControl &control = makeBoxControl(int_marker);
   //control.description = "This is the control";
   control.always_visible = false;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
 
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeButtonSphere( const char *name, const geometry_msgs::PoseStamped &stamped,
+visualization_msgs::msg::InteractiveMarker makeButtonSphere( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
                                                         float scale, bool fixed, bool view_facing)
 {
-  std_msgs::ColorRGBA color;
+  std_msgs::msg::ColorRGBA color;
   return makeButtonSphere(name, stamped, scale, fixed, view_facing, color);
 }
 
-visualization_msgs::InteractiveMarker makeButtonSphere( const char *name, const geometry_msgs::PoseStamped &stamped,
+visualization_msgs::msg::InteractiveMarker makeButtonSphere( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
                                                         float scale, bool fixed, bool view_facing,
-                                                        std_msgs::ColorRGBA color)
+                                                        std_msgs::msg::ColorRGBA color)
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
   //int_marker.description = "This is the marker.";
 
-  visualization_msgs::InteractiveMarkerControl &control = makeSphereControl(int_marker);
+  visualization_msgs::msg::InteractiveMarkerControl &control = makeSphereControl(int_marker);
   //control.description = "This is the control";
   control.always_visible = false;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
   control.markers.back().color = color;
 
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeListControl( const char *name, const geometry_msgs::PoseStamped &stamped, int num, int total, float scale)
+visualization_msgs::msg::InteractiveMarker makeListControl( const char *name, const geometry_msgs::msg::PoseStamped &stamped, int num, int total, float scale)
 {
 
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
-//  control.orientation_mode = visualization_msgs::InteractiveMarkerControl::VIEW_FACING;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+//  control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::VIEW_FACING;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
   std::stringstream ss;
   ss << "pose(" << num << "/" << total << ")";
   interactive_markers::makeViewFacingButton(int_marker, control, ss.str());
@@ -402,24 +406,24 @@ visualization_msgs::InteractiveMarker makeListControl( const char *name, const g
   return int_marker;
 
 
-//  visualization_msgs::InteractiveMarker int_marker;
+//  visualization_msgs::msg::InteractiveMarker int_marker;
 //  int_marker.header =  stamped.header;
 //  int_marker.name = name;
 //  int_marker.scale = scale;
 //  int_marker.pose = stamped.pose;
 //  //int_marker.description = "This is the marker.";
 //
-//  visualization_msgs::InteractiveMarkerControl &control = makeSphereControl(int_marker);
+//  visualization_msgs::msg::InteractiveMarkerControl &control = makeSphereControl(int_marker);
 //  //control.description = "This is the control";
 //  control.always_visible = false;
-//  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+//  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
 //
 //  return int_marker;
 }
 
-visualization_msgs::InteractiveMarker make6DofMarker( const char *name, const geometry_msgs::PoseStamped &stamped, float scale, bool fixed, bool view_facing )
+visualization_msgs::msg::InteractiveMarker make6DofMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed, bool view_facing )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
@@ -427,14 +431,14 @@ visualization_msgs::InteractiveMarker make6DofMarker( const char *name, const ge
 
   if ( view_facing )
   {
-    visualization_msgs::InteractiveMarkerControl control;
-    control.orientation_mode = visualization_msgs::InteractiveMarkerControl::VIEW_FACING;
-    //control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_ROTATE;
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+    visualization_msgs::msg::InteractiveMarkerControl control;
+    control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::VIEW_FACING;
+    //control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_ROTATE;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
     control.orientation.w = 1;
     int_marker.controls.push_back(control);
 
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_PLANE;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_PLANE;
     control.markers.push_back( makeSphere(scale*0.5) );
     int_marker.controls.push_back(control);
   }
@@ -446,24 +450,24 @@ visualization_msgs::InteractiveMarker make6DofMarker( const char *name, const ge
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makePlanarMarker( const char *name, const geometry_msgs::PoseStamped &stamped, float scale, bool fixed )
+visualization_msgs::msg::InteractiveMarker makePlanarMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
-  control.orientation_mode = fixed ? (uint8_t)visualization_msgs::InteractiveMarkerControl::FIXED : (uint8_t)visualization_msgs::InteractiveMarkerControl::INHERIT;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_ROTATE;
+  visualization_msgs::msg::InteractiveMarkerControl control;
+  control.orientation_mode = fixed ? (uint8_t)visualization_msgs::msg::InteractiveMarkerControl::FIXED : (uint8_t)visualization_msgs::msg::InteractiveMarkerControl::INHERIT;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_ROTATE;
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = 1;
   control.orientation.z = 0;
   int_marker.controls.push_back(control);
 
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_PLANE;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_PLANE;
   interactive_markers::makeArrow( int_marker, control, 0 );
   control.markers.back().pose.orientation.w = 0;
   control.markers.back().pose.orientation.x = 0;
@@ -477,24 +481,24 @@ visualization_msgs::InteractiveMarker makePlanarMarker( const char *name, const 
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeElevatorMarker( const char *name, const geometry_msgs::PoseStamped &stamped, float scale, bool fixed)
+visualization_msgs::msg::InteractiveMarker makeElevatorMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed)
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
   if(fixed)
-    control.orientation_mode = visualization_msgs::InteractiveMarkerControl::FIXED;
+    control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::FIXED;
 
   control.orientation.w = 1;
   control.orientation.x = 0;
   control.orientation.y = -1;
   control.orientation.z = 0;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
 
   interactive_markers::makeArrow( int_marker, control, 0.3 );
   control.markers.back().color.r = 0.0;
@@ -514,19 +518,19 @@ visualization_msgs::InteractiveMarker makeElevatorMarker( const char *name, cons
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeProjectorMarker( const char *name, const geometry_msgs::PoseStamped &stamped, float scale)
+visualization_msgs::msg::InteractiveMarker makeProjectorMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale)
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
   control.orientation.w = 1;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CYLINDER;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CYLINDER;
   marker.scale.x = 0.03;
   marker.scale.y = 0.03;
   marker.scale.z = 0.04;
@@ -539,26 +543,26 @@ visualization_msgs::InteractiveMarker makeProjectorMarker( const char *name, con
 }
 
 
-visualization_msgs::InteractiveMarker makeBaseMarker( const char *name, const geometry_msgs::PoseStamped &stamped, float scale, bool fixed)
+visualization_msgs::msg::InteractiveMarker makeBaseMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed)
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   control.orientation.w = 1;
   control.orientation.y = -1;
   int_marker.controls.push_back(control);
 
 
   if(fixed)
-    control.orientation_mode = visualization_msgs::InteractiveMarkerControl::FIXED;
+    control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::FIXED;
 
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
   control.orientation.w = 1;
   control.orientation.y = 0;
 
@@ -596,7 +600,7 @@ visualization_msgs::InteractiveMarker makeBaseMarker( const char *name, const ge
   int_marker.controls.push_back(control);
 
   control.markers.clear();
-  tf::quaternionTFToMsg( tf::Quaternion(tf::Vector3(0,0,1), 135*M_PI/180.0), control.orientation);
+  control.orientation = tf2::toMsg( tf2::Quaternion(tf2::Vector3(0,0,1), 135*M_PI/180.0) );
   interactive_markers::makeArrow( int_marker, control, 1.0 );
   control.markers.back().pose.position.x = 0.7;
   control.markers.back().color.r = 1.0;
@@ -606,7 +610,7 @@ visualization_msgs::InteractiveMarker makeBaseMarker( const char *name, const ge
   int_marker.controls.push_back(control);
 
   control.markers.clear();
-  tf::quaternionTFToMsg( tf::Quaternion(tf::Vector3(0,0,1), -135*M_PI/180.0), control.orientation);
+  control.orientation = tf2::toMsg( tf2::Quaternion(tf2::Vector3(0,0,1), -135*M_PI/180.0) );
   interactive_markers::makeArrow( int_marker, control, 1.0 );
   control.markers.back().pose.position.x = 0.7;
   control.markers.back().color.r = 1.0;
@@ -617,24 +621,24 @@ visualization_msgs::InteractiveMarker makeBaseMarker( const char *name, const ge
   return int_marker;
 }
 
-visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const geometry_msgs::PoseStamped &stamped,
+visualization_msgs::msg::InteractiveMarker makeGripperMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
                                                          float scale, float angle, bool view_facing)
 {
-  std_msgs::ColorRGBA color;
+  std_msgs::msg::ColorRGBA color;
   return makeGripperMarker( name, stamped, scale, angle, view_facing, color, false);
 }
 
-visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const geometry_msgs::PoseStamped &stamped,
-                                                         float scale, float angle, bool view_facing, std_msgs::ColorRGBA color )
+visualization_msgs::msg::InteractiveMarker makeGripperMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
+                                                         float scale, float angle, bool view_facing, std_msgs::msg::ColorRGBA color )
 {
   return makeGripperMarker( name, stamped, scale, angle, view_facing, color, true);
 }
 
 
-visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const geometry_msgs::PoseStamped &stamped,
-                                                         float scale, float angle, bool view_facing, std_msgs::ColorRGBA color, bool use_color )
+visualization_msgs::msg::InteractiveMarker makeGripperMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped,
+                                                         float scale, float angle, bool view_facing, std_msgs::msg::ColorRGBA color, bool use_color )
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
   int_marker.name = name;
   int_marker.scale = 1.0; //scale;
@@ -642,23 +646,23 @@ visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const
 
 //  add6DofControl(int_marker, false);
 
-  visualization_msgs::InteractiveMarkerControl control;
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
-  visualization_msgs::Marker mesh;
+  visualization_msgs::msg::Marker mesh;
   mesh.mesh_use_embedded_materials = !use_color;
-  mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+  mesh.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
   mesh.scale.x = scale;
   mesh.scale.y = scale;
   mesh.scale.z = scale;
   mesh.color = color;
 
-  tf::Transform T1, T2;
-  tf::Transform T_proximal, T_distal;
+  tf2::Transform T1, T2;
+  tf2::Transform T_proximal, T_distal;
 
-  T1.setOrigin(tf::Vector3(0.07691, 0.01, 0));
-  T1.setRotation(tf::Quaternion(tf::Vector3(0,0,1),  angle));
-  T2.setOrigin(tf::Vector3(0.09137, 0.00495, 0));
-  T2.setRotation(tf::Quaternion(tf::Vector3(0,0,1), -angle));
+  T1.setOrigin(tf2::Vector3(0.07691, 0.01, 0));
+  T1.setRotation(tf2::Quaternion(tf2::Vector3(0,0,1),  angle));
+  T2.setOrigin(tf2::Vector3(0.09137, 0.00495, 0));
+  T2.setRotation(tf2::Quaternion(tf2::Vector3(0,0,1), -angle));
   T_proximal = T1;
   T_distal = T1 * T2;
 
@@ -672,10 +676,10 @@ visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const
   mesh.pose = createPoseMsg(T_distal);
   control.markers.push_back( mesh );
 
-  T1.setOrigin(tf::Vector3(0.07691, -0.01, 0));
-  T1.setRotation(tf::Quaternion(tf::Vector3(1,0,0), M_PI)*tf::Quaternion(tf::Vector3(0,0,1),  angle));
-  T2.setOrigin(tf::Vector3(0.09137, 0.00495, 0));
-  T2.setRotation(tf::Quaternion(tf::Vector3(0,0,1), -angle));
+  T1.setOrigin(tf2::Vector3(0.07691, -0.01, 0));
+  T1.setRotation(tf2::Quaternion(tf2::Vector3(1,0,0), M_PI)*tf2::Quaternion(tf2::Vector3(0,0,1),  angle));
+  T2.setOrigin(tf2::Vector3(0.09137, 0.00495, 0));
+  T2.setRotation(tf2::Quaternion(tf2::Vector3(0,0,1), -angle));
   T_proximal = T1;
   T_distal = T1 * T2;
 
@@ -686,7 +690,7 @@ visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const
   mesh.pose = createPoseMsg(T_distal);
   control.markers.push_back( mesh );
 
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
   control.always_visible = true;
   int_marker.controls.push_back( control );
 
@@ -694,20 +698,20 @@ visualization_msgs::InteractiveMarker makeGripperMarker( const char *name, const
 }
 
 
-visualization_msgs::InteractiveMarker makeGraspMarker( const char * name, const geometry_msgs::PoseStamped &stamped, float scale, PoseState pose_state)
+visualization_msgs::msg::InteractiveMarker makeGraspMarker( const char * name, const geometry_msgs::msg::PoseStamped &stamped, float scale, PoseState pose_state)
 {
-  visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker int_marker;
   int_marker.header =  stamped.header;
-  int_marker.header.stamp = ros::Time(0);
+  int_marker.header.stamp = builtin_interfaces::msg::Time();
   int_marker.name = name;
   int_marker.scale = scale;
   int_marker.pose = stamped.pose;
 
-  visualization_msgs::InteractiveMarkerControl control;
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  visualization_msgs::msg::InteractiveMarkerControl control;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
   control.orientation.w = 1;
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::ARROW;
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::ARROW;
   //marker.header = int_marker.header;
   //marker.pose = int_marker.pose;
   marker.scale.x = 0.025*scale;
@@ -716,7 +720,7 @@ visualization_msgs::InteractiveMarker makeGraspMarker( const char * name, const 
   marker.color.r = 1.0;
   marker.color.a = 1.0;
   control.markers.push_back(marker);
-  marker.type = visualization_msgs::Marker::CUBE;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = 0.015*scale;
   marker.scale.y = 0.04*scale;
   marker.scale.z = 0.015*scale;
@@ -749,24 +753,24 @@ visualization_msgs::InteractiveMarker makeGraspMarker( const char * name, const 
 }
 
 
-visualization_msgs::InteractiveMarker makePosedMultiMeshMarker( const char * name, const geometry_msgs::PoseStamped &stamped,
-                                                                const std::vector< geometry_msgs::PoseStamped> &mesh_poses,
+visualization_msgs::msg::InteractiveMarker makePosedMultiMeshMarker( const char * name, const geometry_msgs::msg::PoseStamped &stamped,
+                                                                const std::vector< geometry_msgs::msg::PoseStamped> &mesh_poses,
                                                                 const std::vector<std::string> &mesh_paths, const float &scale,
                                                                 const bool button_only)
 {
     //ROS_ERROR("Start create robot marker...");
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header =  stamped.header;
     int_marker.name = name;
     int_marker.scale = scale;
     int_marker.pose = stamped.pose;
 
     bool fixed = false;
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
     if( !button_only )
     {
-        control.orientation_mode = fixed ? (uint8_t)visualization_msgs::InteractiveMarkerControl::FIXED : (uint8_t)visualization_msgs::InteractiveMarkerControl::INHERIT;
-        control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+        control.orientation_mode = fixed ? (uint8_t)visualization_msgs::msg::InteractiveMarkerControl::FIXED : (uint8_t)visualization_msgs::msg::InteractiveMarkerControl::INHERIT;
+        control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
         control.orientation.w = 1;
         control.orientation.x = 0;
         control.orientation.y = 1;
@@ -776,19 +780,19 @@ visualization_msgs::InteractiveMarker makePosedMultiMeshMarker( const char * nam
 
     control.markers.clear();
     if (button_only) {
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     }
     else {
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_PLANE;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_PLANE;
     }
     control.always_visible = true;
     for(size_t i = 0; i < mesh_poses.size(); i++)
     {
-        visualization_msgs::Marker mesh;
-        mesh.color = std_msgs::ColorRGBA();
+        visualization_msgs::msg::Marker mesh;
+        mesh.color = std_msgs::msg::ColorRGBA();
         mesh.mesh_resource = mesh_paths[i];
         mesh.mesh_use_embedded_materials = true;
-        mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+        mesh.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
         mesh.scale.x = mesh.scale.y = mesh.scale.z = scale;
         mesh.pose = mesh_poses[i].pose;
         control.markers.push_back( mesh );
@@ -799,12 +803,12 @@ visualization_msgs::InteractiveMarker makePosedMultiMeshMarker( const char * nam
 
 }
 
-visualization_msgs::InteractiveMarker makeFollowerMultiMeshMarker( const char * name, const geometry_msgs::PoseStamped &stamped,
+visualization_msgs::msg::InteractiveMarker makeFollowerMultiMeshMarker( const char * name, const geometry_msgs::msg::PoseStamped &stamped,
                                                                    const std::vector<std::string> &mesh_frames,
                                                                    const std::vector<std::string> &mesh_paths,
                                                                    const float &scale)
 {
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header =  stamped.header;
     int_marker.name = name;
     int_marker.scale = scale;
@@ -812,22 +816,22 @@ visualization_msgs::InteractiveMarker makeFollowerMultiMeshMarker( const char * 
 
     if(mesh_frames.size() != mesh_paths.size())
     {
-      ROS_ERROR("The number of mesh frames and mesh paths is not equal!");
+      RCLCPP_ERROR(rclcpp::get_logger("im_helpers"), "The number of mesh frames and mesh paths is not equal!");
       return int_marker;
     }
 
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
 
     control.markers.clear();
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     control.always_visible = true;
     for(size_t i = 0; i < mesh_frames.size(); i++)
     {
-        visualization_msgs::Marker mesh;
-        mesh.color = std_msgs::ColorRGBA();
+        visualization_msgs::msg::Marker mesh;
+        mesh.color = std_msgs::msg::ColorRGBA();
         mesh.mesh_resource = mesh_paths[i];
         mesh.mesh_use_embedded_materials = true;
-        mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+        mesh.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
         mesh.scale.x = mesh.scale.y = mesh.scale.z = scale;
         mesh.pose.orientation.w = 1;
         mesh.header.frame_id = mesh_frames[i];

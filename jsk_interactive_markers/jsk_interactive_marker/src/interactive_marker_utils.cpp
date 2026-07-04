@@ -1,24 +1,34 @@
 #include <jsk_interactive_marker/interactive_marker_utils.h>
-#include <boost/filesystem/operations.hpp>
+#include <filesystem>
 #include <iostream>
 #include <stdlib.h>
-#include <ros/package.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include <ament_index_cpp/get_package_prefix.hpp>
 #include "urdf_parser/urdf_parser.h"
 
 #include <kdl/frames_io.hpp>
-#include <tf_conversions/tf_kdl.h>
+#include <tf2_kdl/tf2_kdl.hpp>
 
 using namespace urdf;
 using namespace std;
-using namespace boost;
-using namespace boost::filesystem;
 //using namespace im_utils;
 
 namespace im_utils {
 
+  namespace {
+    // ros::package::getPath equivalent: returns "" when the package is not found
+    std::string getPackagePath(const std::string &package){
+      try{
+        return ament_index_cpp::get_package_share_directory(package);
+      }catch(const ament_index_cpp::PackageNotFoundError &){
+        return "";
+      }
+    }
+  }
+
   //transform msgs
-  geometry_msgs::Transform Pose2Transform( const geometry_msgs::Pose pose_msg){
-    geometry_msgs::Transform tf_msg;
+  geometry_msgs::msg::Transform Pose2Transform( const geometry_msgs::msg::Pose pose_msg){
+    geometry_msgs::msg::Transform tf_msg;
     tf_msg.translation.x = pose_msg.position.x;
     tf_msg.translation.y = pose_msg.position.y;
     tf_msg.translation.z = pose_msg.position.z;
@@ -26,8 +36,8 @@ namespace im_utils {
     return tf_msg;
   }
 
-  geometry_msgs::Pose Transform2Pose( const geometry_msgs::Transform tf_msg){
-    geometry_msgs::Pose pose_msg;
+  geometry_msgs::msg::Pose Transform2Pose( const geometry_msgs::msg::Transform tf_msg){
+    geometry_msgs::msg::Pose pose_msg;
     pose_msg.position.x =  tf_msg.translation.x;
     pose_msg.position.y = tf_msg.translation.y;
     pose_msg.position.z = tf_msg.translation.z;
@@ -35,15 +45,15 @@ namespace im_utils {
     return pose_msg;
   }
 
-  geometry_msgs::Pose UrdfPose2Pose( const urdf::Pose pose){
-    geometry_msgs::Pose p_msg;
+  geometry_msgs::msg::Pose UrdfPose2Pose( const urdf::Pose pose){
+    geometry_msgs::msg::Pose p_msg;
     double x, y, z, w;
     pose.rotation.getQuaternion(x,y,z,w);
     p_msg.orientation.x = x;
     p_msg.orientation.y = y;
     p_msg.orientation.z = z;
     p_msg.orientation.w = w;
-  
+
     p_msg.position.x = pose.position.x;
     p_msg.position.y = pose.position.y;
     p_msg.position.z = pose.position.z;
@@ -52,56 +62,56 @@ namespace im_utils {
   }
 
 
-  visualization_msgs::InteractiveMarkerControl makeCylinderMarkerControl(const geometry_msgs::PoseStamped &stamped, double length,  double radius, const std_msgs::ColorRGBA &color, bool use_color){
-    visualization_msgs::Marker cylinderMarker;
+  visualization_msgs::msg::InteractiveMarkerControl makeCylinderMarkerControl(const geometry_msgs::msg::PoseStamped &stamped, double length,  double radius, const std_msgs::msg::ColorRGBA &color, bool use_color){
+    visualization_msgs::msg::Marker cylinderMarker;
 
     if (use_color) cylinderMarker.color = color;
-    cylinderMarker.type = visualization_msgs::Marker::CYLINDER;
+    cylinderMarker.type = visualization_msgs::msg::Marker::CYLINDER;
     cylinderMarker.scale.x = radius * 2;
     cylinderMarker.scale.y = radius * 2;
     cylinderMarker.scale.z = length;
     cylinderMarker.pose = stamped.pose;
 
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
     control.markers.push_back( cylinderMarker );
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     control.always_visible = true;
 
     return control;
   }
 
-  visualization_msgs::InteractiveMarkerControl makeBoxMarkerControl(const geometry_msgs::PoseStamped &stamped, Vector3 dim, const std_msgs::ColorRGBA &color, bool use_color){
-    visualization_msgs::Marker boxMarker;
+  visualization_msgs::msg::InteractiveMarkerControl makeBoxMarkerControl(const geometry_msgs::msg::PoseStamped &stamped, Vector3 dim, const std_msgs::msg::ColorRGBA &color, bool use_color){
+    visualization_msgs::msg::Marker boxMarker;
 
     fprintf(stderr, "urdfModelMarker = %f %f %f\n", dim.x, dim.y, dim.z);
     if (use_color) boxMarker.color = color;
-    boxMarker.type = visualization_msgs::Marker::CUBE;
+    boxMarker.type = visualization_msgs::msg::Marker::CUBE;
     boxMarker.scale.x = dim.x;
     boxMarker.scale.y = dim.y;
     boxMarker.scale.z = dim.z;
     boxMarker.pose = stamped.pose;
 
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
     control.markers.push_back( boxMarker );
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     control.always_visible = true;
 
     return control;
   }
 
-  visualization_msgs::InteractiveMarkerControl makeSphereMarkerControl(const geometry_msgs::PoseStamped &stamped, double rad, const std_msgs::ColorRGBA &color, bool use_color){
-    visualization_msgs::Marker sphereMarker;
+  visualization_msgs::msg::InteractiveMarkerControl makeSphereMarkerControl(const geometry_msgs::msg::PoseStamped &stamped, double rad, const std_msgs::msg::ColorRGBA &color, bool use_color){
+    visualization_msgs::msg::Marker sphereMarker;
 
     if (use_color) sphereMarker.color = color;
-    sphereMarker.type = visualization_msgs::Marker::SPHERE;
+    sphereMarker.type = visualization_msgs::msg::Marker::SPHERE;
     sphereMarker.scale.x = rad * 2;
     sphereMarker.scale.y = rad * 2;
     sphereMarker.scale.z = rad * 2;
     sphereMarker.pose = stamped.pose;
 
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
     control.markers.push_back( sphereMarker );
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     control.always_visible = true;
 
     return control;
@@ -109,27 +119,27 @@ namespace im_utils {
 
 
 
-  visualization_msgs::InteractiveMarkerControl makeMeshMarkerControl(const std::string &mesh_resource, const geometry_msgs::PoseStamped &stamped, geometry_msgs::Vector3 scale, const std_msgs::ColorRGBA &color, bool use_color){
-    visualization_msgs::Marker meshMarker;
+  visualization_msgs::msg::InteractiveMarkerControl makeMeshMarkerControl(const std::string &mesh_resource, const geometry_msgs::msg::PoseStamped &stamped, geometry_msgs::msg::Vector3 scale, const std_msgs::msg::ColorRGBA &color, bool use_color){
+    visualization_msgs::msg::Marker meshMarker;
 
     if (use_color) meshMarker.color = color;
     meshMarker.mesh_resource = mesh_resource;
     meshMarker.mesh_use_embedded_materials = !use_color;
-    meshMarker.type = visualization_msgs::Marker::MESH_RESOURCE;
-  
+    meshMarker.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
+
     meshMarker.scale = scale;
     meshMarker.pose = stamped.pose;
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
     control.markers.push_back( meshMarker );
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     control.always_visible = true;
-  
+
     return control;
   }
 
-  visualization_msgs::InteractiveMarkerControl makeMeshMarkerControl(const std::string &mesh_resource, const geometry_msgs::PoseStamped &stamped, geometry_msgs::Vector3 scale)
+  visualization_msgs::msg::InteractiveMarkerControl makeMeshMarkerControl(const std::string &mesh_resource, const geometry_msgs::msg::PoseStamped &stamped, geometry_msgs::msg::Vector3 scale)
   {
-    std_msgs::ColorRGBA color;
+    std_msgs::msg::ColorRGBA color;
     color.r = 0;
     color.g = 0;
     color.b = 0;
@@ -137,30 +147,30 @@ namespace im_utils {
     return makeMeshMarkerControl(mesh_resource, stamped, scale, color, false);
   }
 
-  visualization_msgs::InteractiveMarkerControl makeMeshMarkerControl(const std::string &mesh_resource,
-                                                                     const geometry_msgs::PoseStamped &stamped, geometry_msgs::Vector3 scale, const std_msgs::ColorRGBA &color)
+  visualization_msgs::msg::InteractiveMarkerControl makeMeshMarkerControl(const std::string &mesh_resource,
+                                                                     const geometry_msgs::msg::PoseStamped &stamped, geometry_msgs::msg::Vector3 scale, const std_msgs::msg::ColorRGBA &color)
   {
     return makeMeshMarkerControl(mesh_resource, stamped, scale, color, true);
   }
-  
-  void addMeshLinksControl(visualization_msgs::InteractiveMarker &im, LinkConstSharedPtr link, KDL::Frame previous_frame, bool use_color, std_msgs::ColorRGBA color, double scale){
+
+  void addMeshLinksControl(visualization_msgs::msg::InteractiveMarker &im, LinkConstSharedPtr link, KDL::Frame previous_frame, bool use_color, std_msgs::msg::ColorRGBA color, double scale){
     addMeshLinksControl(im, link, previous_frame, use_color, color, scale, true);
   }
 
-  void addMeshLinksControl(visualization_msgs::InteractiveMarker &im, LinkConstSharedPtr link, KDL::Frame previous_frame, bool use_color, std_msgs::ColorRGBA color, double scale, bool root){
+  void addMeshLinksControl(visualization_msgs::msg::InteractiveMarker &im, LinkConstSharedPtr link, KDL::Frame previous_frame, bool use_color, std_msgs::msg::ColorRGBA color, double scale, bool root){
     if(!root && link->parent_joint){
       KDL::Frame parent_to_joint_frame;
-      geometry_msgs::Pose parent_to_joint_pose = UrdfPose2Pose(link->parent_joint->parent_to_joint_origin_transform);
-      tf::poseMsgToKDL(parent_to_joint_pose, parent_to_joint_frame);
+      geometry_msgs::msg::Pose parent_to_joint_pose = UrdfPose2Pose(link->parent_joint->parent_to_joint_origin_transform);
+      tf2::fromMsg(parent_to_joint_pose, parent_to_joint_frame);
       previous_frame =  previous_frame * parent_to_joint_frame;
     }
 
     //    KDL::Frame pose_frame, offset_frame;
-    //    tf::poseMsgToKDL(pose, pose_frame);
-    //    tf::poseMsgToKDL(root_offset_, offset_frame);
+    //    tf2::fromMsg(pose, pose_frame);
+    //    tf2::fromMsg(root_offset_, offset_frame);
     //    pose_frame = pose_frame * offset_frame;
 
-    geometry_msgs::PoseStamped ps;
+    geometry_msgs::msg::PoseStamped ps;
     //link_array
     std::vector<VisualSharedPtr> visual_array;
     if(link->visual_array.size() != 0){
@@ -168,31 +178,27 @@ namespace im_utils {
     }else if(link->visual.get() != NULL){
       visual_array.push_back(link->visual);
     }
-    for(int i=0; i<visual_array.size(); i++){
+    for(size_t i=0; i<visual_array.size(); i++){
       VisualSharedPtr link_visual = visual_array[i];
       if(link_visual.get() != NULL && link_visual->geometry.get() != NULL){
-	visualization_msgs::InteractiveMarkerControl meshControl;
+	visualization_msgs::msg::InteractiveMarkerControl meshControl;
 	if(link_visual->geometry->type == Geometry::MESH){
-#if ROS_VERSION_MINIMUM(1,14,0) // melodic
 	  MeshConstSharedPtr mesh = std::static_pointer_cast<const Mesh>(link_visual->geometry);
-#else
-        MeshConstSharedPtr mesh = boost::static_pointer_cast<const Mesh>(link_visual->geometry);
-#endif
 	  string model_mesh_ = mesh->filename;
           model_mesh_ = getRosPathFromModelPath(model_mesh_);
-          
+
 	  //ps.pose = UrdfPose2Pose(link_visual->origin);
           KDL::Frame pose_frame, origin_frame;
 
-          tf::poseMsgToKDL(UrdfPose2Pose(link_visual->origin), origin_frame);
+          tf2::fromMsg(UrdfPose2Pose(link_visual->origin), origin_frame);
           pose_frame =  previous_frame * origin_frame;
-          geometry_msgs::Pose pose;
-          tf::poseKDLToMsg(pose_frame, pose);
+          geometry_msgs::msg::Pose pose;
+          pose = tf2::toMsg(pose_frame);
           ps.pose = pose;
 
 	  cout << "mesh_file:" << model_mesh_ << endl;
 
-	  geometry_msgs::Vector3 mesh_scale;
+	  geometry_msgs::msg::Vector3 mesh_scale;
 	  mesh_scale.x = mesh->scale.x * scale;
 	  mesh_scale.y = mesh->scale.y * scale;
 	  mesh_scale.z = mesh->scale.z * scale;
@@ -202,11 +208,7 @@ namespace im_utils {
 	    meshControl = makeMeshMarkerControl(model_mesh_, ps, mesh_scale);
 	  }
 	}else if(link_visual->geometry->type == Geometry::CYLINDER){
-#if ROS_VERSION_MINIMUM(1,14,0) // melodic
-    CylinderConstSharedPtr cylinder = std::static_pointer_cast<const Cylinder>(link_visual->geometry);
-#else
-    CylinderConstSharedPtr cylinder = boost::static_pointer_cast<const Cylinder>(link_visual->geometry);
-#endif
+	  CylinderConstSharedPtr cylinder = std::static_pointer_cast<const Cylinder>(link_visual->geometry);
 	  std::cout << "cylinder " << link->name;
 	  ps.pose = UrdfPose2Pose(link_visual->origin);
 	  double length = cylinder->length;
@@ -218,11 +220,7 @@ namespace im_utils {
 	    meshControl = makeCylinderMarkerControl(ps, length, radius, color, true);
 	  }
 	}else if(link_visual->geometry->type == Geometry::BOX){
-#if ROS_VERSION_MINIMUM(1,14,0) // melodic
-    BoxConstSharedPtr box = std::static_pointer_cast<const Box>(link_visual->geometry);
-#else
-    BoxConstSharedPtr box = boost::static_pointer_cast<const Box>(link_visual->geometry);
-#endif
+	  BoxConstSharedPtr box = std::static_pointer_cast<const Box>(link_visual->geometry);
 	  std::cout << "box " << link->name;
 	  ps.pose = UrdfPose2Pose(link_visual->origin);
 	  Vector3 dim = box->dim;
@@ -233,11 +231,7 @@ namespace im_utils {
 	    meshControl = makeBoxMarkerControl(ps, dim, color, true);
 	  }
 	}else if(link_visual->geometry->type == Geometry::SPHERE){
-#if ROS_VERSION_MINIMUM(1,14,0) // melodic
-    SphereConstSharedPtr sphere = std::static_pointer_cast<const Sphere>(link_visual->geometry);
-#else
-    SphereConstSharedPtr sphere = boost::static_pointer_cast<const Sphere>(link_visual->geometry);
-#endif
+	  SphereConstSharedPtr sphere = std::static_pointer_cast<const Sphere>(link_visual->geometry);
 	  ps.pose = UrdfPose2Pose(link_visual->origin);
 	  double rad = sphere->radius;
 	  if(use_color){
@@ -278,9 +272,9 @@ namespace im_utils {
   }
 
   //sample program
-  visualization_msgs::InteractiveMarker makeLinksMarker(LinkConstSharedPtr link, bool use_color, std_msgs::ColorRGBA color, geometry_msgs::PoseStamped marker_ps, geometry_msgs::Pose origin_pose)
+  visualization_msgs::msg::InteractiveMarker makeLinksMarker(LinkConstSharedPtr link, bool use_color, std_msgs::msg::ColorRGBA color, geometry_msgs::msg::PoseStamped marker_ps, geometry_msgs::msg::Pose origin_pose)
   {
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header = marker_ps.header;
     int_marker.pose = marker_ps.pose;
 
@@ -288,7 +282,7 @@ namespace im_utils {
     int_marker.scale = 1.0;
 
     KDL::Frame origin_frame;
-    tf::poseMsgToKDL(origin_pose, origin_frame);
+    tf2::fromMsg(origin_pose, origin_frame);
     addMeshLinksControl(int_marker, link, origin_frame, use_color, color, 1.0);
     return int_marker;
 
@@ -296,17 +290,17 @@ namespace im_utils {
 
 
 
-  visualization_msgs::InteractiveMarker makeFingerControlMarker(const char *name, geometry_msgs::PoseStamped ps){
-    visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker makeFingerControlMarker(const char *name, geometry_msgs::msg::PoseStamped ps){
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.name = name;
     int_marker.header = ps.header;
     int_marker.pose = ps.pose;
     int_marker.scale = 0.5;
 
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
 
-    //control.orientation_mode = visualization_msgs::InteractiveMarkerControl::VIEW_FACING;
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+    //control.orientation_mode = visualization_msgs::msg::InteractiveMarkerControl::VIEW_FACING;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
     control.orientation.w = 1;
     control.orientation.x = 0;
     control.orientation.y = 0;
@@ -320,12 +314,12 @@ namespace im_utils {
 
   /*
 
-    visualization_msgs::InteractiveMarker makeSandiaHandMarker(geometry_msgs::PoseStamped ps){
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker makeSandiaHandMarker(geometry_msgs::msg::PoseStamped ps){
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header = ps.header;
     int_marker.pose = ps.pose;
 
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
 
     control.markers.push_back(makeSandiaFinger0Marker("/right_f0_0"));
     int_marker.controls.push_back(control);
@@ -380,17 +374,17 @@ namespace im_utils {
   */
 
 
-  visualization_msgs::InteractiveMarker makeSandiaHandInteractiveMarker(geometry_msgs::PoseStamped ps, std::string hand, int finger, int link){
-    visualization_msgs::InteractiveMarker int_marker;
+  visualization_msgs::msg::InteractiveMarker makeSandiaHandInteractiveMarker(geometry_msgs::msg::PoseStamped ps, std::string hand, int finger, int link){
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header = ps.header;
     int_marker.pose = ps.pose;
-  
 
-    visualization_msgs::InteractiveMarkerControl control;
+
+    visualization_msgs::msg::InteractiveMarkerControl control;
     std::stringstream ss;
     //std::string frame = "/" + hand + "_" + finger + "_" + link;
     ss << hand << "_f" << finger << "_" << link;
-  
+
     int_marker.name = ss.str() + "Marker";
     int_marker.header.frame_id = ss.str();
     //  std::string frame_id = "odom";
@@ -412,7 +406,7 @@ namespace im_utils {
     default:
       break;
     }
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+    control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     int_marker.controls.push_back(control);
 
     return int_marker;
@@ -420,12 +414,12 @@ namespace im_utils {
 
 
 
-  visualization_msgs::Marker makeSandiaFinger0Marker(std::string frame_id){
-    visualization_msgs::Marker marker;
+  visualization_msgs::msg::Marker makeSandiaFinger0Marker(std::string frame_id){
+    visualization_msgs::msg::Marker marker;
     marker.header.frame_id = frame_id;
     //marker.header.frame_id = "odom";
-    marker.type = visualization_msgs::Marker::CYLINDER;
-    marker.action = visualization_msgs::Marker::ADD;
+    marker.type = visualization_msgs::msg::Marker::CYLINDER;
+    marker.action = visualization_msgs::msg::Marker::ADD;
     marker.pose.position.x = 0;
     marker.pose.position.y = 0;
     marker.pose.position.z = 0.003;
@@ -444,11 +438,11 @@ namespace im_utils {
     return marker;
   }
 
-  visualization_msgs::Marker makeSandiaFinger1Marker(std::string frame_id){
-    visualization_msgs::Marker marker;
+  visualization_msgs::msg::Marker makeSandiaFinger1Marker(std::string frame_id){
+    visualization_msgs::msg::Marker marker;
     marker.header.frame_id = frame_id;
-    marker.type = visualization_msgs::Marker::CYLINDER;
-    marker.action = visualization_msgs::Marker::ADD;
+    marker.type = visualization_msgs::msg::Marker::CYLINDER;
+    marker.action = visualization_msgs::msg::Marker::ADD;
     marker.pose.position.x = 0.024;
     marker.pose.position.y = 0;
     marker.pose.position.z = 0;
@@ -467,11 +461,11 @@ namespace im_utils {
     return marker;
   }
 
-  visualization_msgs::Marker makeSandiaFinger2Marker(std::string frame_id){
-    visualization_msgs::Marker marker;
+  visualization_msgs::msg::Marker makeSandiaFinger2Marker(std::string frame_id){
+    visualization_msgs::msg::Marker marker;
     marker.header.frame_id = frame_id;
-    marker.type = visualization_msgs::Marker::CYLINDER;
-    marker.action = visualization_msgs::Marker::ADD;
+    marker.type = visualization_msgs::msg::Marker::CYLINDER;
+    marker.action = visualization_msgs::msg::Marker::ADD;
     marker.pose.position.x = 0.024;
     marker.pose.position.y = 0;
     marker.pose.position.z = 0;
@@ -536,7 +530,7 @@ namespace im_utils {
 	  continue;
 	}
 
-	if( search_path != "" && ros::package::getPath(search_path) != ""){
+	if( search_path != "" && getPackagePath(search_path) != ""){
 	  return "package://" + search_path + path.erase(0, current-1);
 	}
       }
@@ -548,7 +542,7 @@ namespace im_utils {
 
   std::string getFullPathFromModelPath(std::string path){
     std::string gazebo_model_path="";
-  
+
     FILE* fp;
     char buf[1000000];
 
@@ -570,11 +564,11 @@ namespace im_utils {
 	try{
 	  std::string search_path = std::string(gazebo_model_path, current, found - current);
 	  current = found + 1;
-	  recursive_directory_iterator iter = recursive_directory_iterator(search_path);
-	  recursive_directory_iterator end = recursive_directory_iterator();
+	  std::filesystem::recursive_directory_iterator iter(search_path);
+	  std::filesystem::recursive_directory_iterator end;
 	  for (; iter != end; ++iter) {
-	    if (is_regular_file(*iter)) {
-	      int locate = iter->path().string().find( path, 0 );
+	    if (std::filesystem::is_regular_file(iter->path())) {
+	      size_t locate = iter->path().string().find( path, 0 );
 	      if( locate != std::string::npos){
 		//for example file:///hoge/fuga.dae
 		return "file://" + iter->path().string();
@@ -600,21 +594,21 @@ namespace im_utils {
       }
       std::string package = path.substr(0, pos);
       path.erase(0, pos);
-      std::string package_path = ros::package::getPath(package);
+      std::string package_path = getPackagePath(package);
       if (package_path.empty())
 	{
 	  std::cout <<  "Package [" + package + "] does not exist" << std::endl;
 	}
- 
+
       path = package_path + path;
     }
     return path;
   }
 
-  geometry_msgs::Pose getPose( XmlRpc::XmlRpcValue val){
-    geometry_msgs::Pose p;
-    if(val.hasMember("position")){
-      XmlRpc::XmlRpcValue pos = val["position"];
+  geometry_msgs::msg::Pose getPose( const YAML::Node &val){
+    geometry_msgs::msg::Pose p;
+    if(val["position"]){
+      YAML::Node pos = val["position"];
       p.position.x = getXmlValue(pos["x"]);
       p.position.y = getXmlValue(pos["y"]);
       p.position.z = getXmlValue(pos["z"]);
@@ -622,8 +616,8 @@ namespace im_utils {
       p.position.x = p.position.y = p.position.z = 0.0;
     }
 
-    if(val.hasMember("orientation")){
-      XmlRpc::XmlRpcValue ori = val["orientation"];
+    if(val["orientation"]){
+      YAML::Node ori = val["orientation"];
       p.orientation.x = getXmlValue(ori["x"]);
       p.orientation.y = getXmlValue(ori["y"]);
       p.orientation.z = getXmlValue(ori["z"]);
@@ -636,17 +630,16 @@ namespace im_utils {
     return p;
   }
 
-  double getXmlValue( XmlRpc::XmlRpcValue val ){
-    switch(val.getType()){
-    case XmlRpc::XmlRpcValue::TypeInt:
-      return (double)((int)val);
-    case XmlRpc::XmlRpcValue::TypeDouble:
-      return (double)val;
-    default:
+  double getXmlValue( const YAML::Node &val ){
+    if(!val.IsDefined() || val.IsNull()){
+      return 0;
+    }
+    try{
+      return val.as<double>();
+    }catch(const YAML::Exception &){
       return 0;
     }
   }
 
 }
-
 

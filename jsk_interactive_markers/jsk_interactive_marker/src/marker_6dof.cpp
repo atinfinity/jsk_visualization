@@ -33,44 +33,46 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <ros/ros.h>
-#include <interactive_markers/interactive_marker_server.h>
-#include <interactive_markers/tools.h>
-#include <interactive_markers/menu_handler.h>
-#include <tf/transform_broadcaster.h>
-#include <tf/transform_listener.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <tf_conversions/tf_eigen.h>
-#include <jsk_topic_tools/rosparam_utils.h>
+#include <rclcpp/rclcpp.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <interactive_markers/tools.hpp>
+#include <interactive_markers/menu_handler.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
-class Marker6DOF {
+#include <chrono>
+#include <mutex>
+
+class Marker6DOF : public rclcpp::Node {
 public:
-  Marker6DOF(): show_6dof_circle_(true) {
-    ros::NodeHandle nh, pnh("~");
-    pnh.param("publish_tf", publish_tf_, false);
-    pnh.param("publish_pose_periodically", publish_pose_periodically_, false);
-    pnh.param("tf_frame", tf_frame_, std::string("object"));
-    double tf_duration;
-    pnh.param("tf_duration", tf_duration, 0.1);
-    pnh.param("object_type", object_type_, std::string("sphere"));
-    pnh.param("object_x", object_x_, 1.0);
-    pnh.param("object_y", object_y_, 1.0);
-    pnh.param("object_z", object_z_, 1.0);
-    pnh.param("object_r", object_r_, 1.0);
-    pnh.param("object_g", object_g_, 1.0);
-    pnh.param("object_b", object_b_, 1.0);
-    pnh.param("object_a", object_a_, 1.0);
-    pnh.param("frame_id", frame_id_, std::string("/map"));
+  Marker6DOF(): rclcpp::Node("marker_6dof"), show_6dof_circle_(true) {
+    publish_tf_ = this->declare_parameter("publish_tf", false);
+    publish_pose_periodically_ = this->declare_parameter("publish_pose_periodically", false);
+    tf_frame_ = this->declare_parameter("tf_frame", std::string("object"));
+    double tf_duration = this->declare_parameter("tf_duration", 0.1);
+    object_type_ = this->declare_parameter("object_type", std::string("sphere"));
+    object_x_ = this->declare_parameter("object_x", 1.0);
+    object_y_ = this->declare_parameter("object_y", 1.0);
+    object_z_ = this->declare_parameter("object_z", 1.0);
+    object_r_ = this->declare_parameter("object_r", 1.0);
+    object_g_ = this->declare_parameter("object_g", 1.0);
+    object_b_ = this->declare_parameter("object_b", 1.0);
+    object_a_ = this->declare_parameter("object_a", 1.0);
+    frame_id_ = this->declare_parameter("frame_id", std::string("map"));
     latest_pose_.header.frame_id = frame_id_;
     double initial_x, initial_y, initial_z;
-    pnh.param("initial_x", initial_x, 0.0);
-    pnh.param("initial_y", initial_y, 0.0);
-    pnh.param("initial_z", initial_z, 0.0);
+    initial_x = this->declare_parameter("initial_x", 0.0);
+    initial_y = this->declare_parameter("initial_y", 0.0);
+    initial_z = this->declare_parameter("initial_z", 0.0);
     latest_pose_.pose.position.x = initial_x;
     latest_pose_.pose.position.y = initial_y;
     latest_pose_.pose.position.z = initial_z;
-    std::vector<double> initial_orientation;
-    if (jsk_topic_tools::readVectorParameter(pnh, "initial_orientation", initial_orientation)) {
+    std::vector<double> initial_orientation
+      = this->declare_parameter("initial_orientation", std::vector<double>());
+    if (initial_orientation.size() == 4) {
       latest_pose_.pose.orientation.x = initial_orientation[0];
       latest_pose_.pose.orientation.y = initial_orientation[1];
       latest_pose_.pose.orientation.z = initial_orientation[2];
@@ -79,49 +81,55 @@ public:
     else {
       latest_pose_.pose.orientation.w = 1.0;
     }
-    pnh.param("line_width", line_width_, 0.007);
-    pnh.param("mesh_file", mesh_file_, std::string(""));
-    if (pnh.hasParam("interactive_marker_scale")) {
-      pnh.param("interactive_marker_scale", int_marker_scale_, 1.0);
-    } else {
-      int_marker_scale_ = std::max(object_x_, std::max(object_y_, object_z_)) + 0.5;
-    }
+    line_width_ = this->declare_parameter("line_width", 0.007);
+    mesh_file_ = this->declare_parameter("mesh_file", std::string(""));
+    // if the parameter is not set, use the size of the object to compute the scale
+    int_marker_scale_ = this->declare_parameter(
+      "interactive_marker_scale",
+      std::max(object_x_, std::max(object_y_, object_z_)) + 0.5);
     if (publish_tf_) {
-      tf_broadcaster_.reset(new tf::TransformBroadcaster);
-      tf_listener_.reset(new tf::TransformListener);
+      tf_broadcaster_.reset(new tf2_ros::TransformBroadcaster(this));
+      tf_buffer_.reset(new tf2_ros::Buffer(this->get_clock()));
+      tf_listener_.reset(new tf2_ros::TransformListener(*tf_buffer_));
     }
-    
-    pose_pub_ = pnh.advertise<geometry_msgs::PoseStamped>("pose", 1);
-    pose_stamped_sub_ = pnh.subscribe("move_marker", 1, &Marker6DOF::moveMarkerCB, this);
-  
+
+    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("~/pose", 1);
+    pose_stamped_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "~/move_marker", 1,
+      std::bind(&Marker6DOF::moveMarkerCB, this, std::placeholders::_1));
+
     circle_menu_entry_
       = menu_handler_.insert("Toggle 6DOF Circle",
-                             boost::bind(&Marker6DOF::menuFeedbackCB, this, _1));
+                             std::bind(&Marker6DOF::menuFeedbackCB, this, std::placeholders::_1));
     menu_handler_.setCheckState(circle_menu_entry_,
                                 interactive_markers::MenuHandler::CHECKED);
-    server_.reset( new interactive_markers::InteractiveMarkerServer(ros::this_node::getName()));
+    server_.reset( new interactive_markers::InteractiveMarkerServer(this->get_name(), this));
     initializeInteractiveMarker();
     // Timer to update current pose on Rviz in the case which user re-enabled the plugin
-    timer_pose_ = nh.createTimer(ros::Duration(0.1), boost::bind(&Marker6DOF::timerPoseCallback, this, _1));
+    timer_pose_ = this->create_wall_timer(
+      std::chrono::duration<double>(0.1),
+      std::bind(&Marker6DOF::timerPoseCallback, this));
     if (publish_tf_) {
-      timer_tf_ = nh.createTimer(ros::Duration(tf_duration), boost::bind(&Marker6DOF::timerTFCallback, this, _1));
+      timer_tf_ = this->create_wall_timer(
+        std::chrono::duration<double>(tf_duration),
+        std::bind(&Marker6DOF::timerTFCallback, this));
     }
   }
-  
+
 protected:
-  void moveMarkerCB(const geometry_msgs::PoseStamped::ConstPtr& msg) {
-    boost::mutex::scoped_lock lock(mutex_);
+  void moveMarkerCB(const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if(!publish_pose_periodically_) {
-      pose_pub_.publish(msg);
+      pose_pub_->publish(*msg);
     }
     server_->setPose("marker", msg->pose, msg->header);
-    latest_pose_ = geometry_msgs::PoseStamped(*msg);
+    latest_pose_ = geometry_msgs::msg::PoseStamped(*msg);
     server_->applyChanges();
   }
 
-  
-  void calculateBoundingBox( visualization_msgs::Marker& object_marker){
-    geometry_msgs::Point top[5];
+
+  void calculateBoundingBox( visualization_msgs::msg::Marker& object_marker){
+    geometry_msgs::msg::Point top[5];
     top[0].x = object_x_/2;
     top[0].y = object_y_/2;
     top[1].x = -object_x_/2;
@@ -129,11 +137,11 @@ protected:
     top[2].x = -object_x_/2;
     top[2].y = -object_y_/2;
     top[3].x = object_x_/2;
-    top[3].y = -object_y_/2;    
+    top[3].y = -object_y_/2;
     top[4].x = object_x_/2;
     top[4].y = object_y_/2;
 
-    geometry_msgs::Point bottom[5];
+    geometry_msgs::msg::Point bottom[5];
     bottom[0].x = object_x_/2;
     bottom[0].y = object_y_/2;
     bottom[1].x = -object_x_/2;
@@ -159,16 +167,16 @@ protected:
       object_marker.points.push_back(bottom[i]);
     }
   }
-  
+
   void initializeInteractiveMarker() {
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header.frame_id = latest_pose_.header.frame_id;
     int_marker.name = "marker";
-    int_marker.pose = geometry_msgs::Pose(latest_pose_.pose);
-    
-    visualization_msgs::Marker object_marker;
+    int_marker.pose = geometry_msgs::msg::Pose(latest_pose_.pose);
+
+    visualization_msgs::msg::Marker object_marker;
     if(object_type_ == std::string("cube")){
-      object_marker.type = visualization_msgs::Marker::CUBE;
+      object_marker.type = visualization_msgs::msg::Marker::CUBE;
       object_marker.scale.x = object_x_;
       object_marker.scale.y = object_y_;
       object_marker.scale.z = object_z_;
@@ -179,7 +187,7 @@ protected:
       object_marker.pose.orientation.w = 1.0;
     }
     else if( object_type_ == std::string("sphere") ){
-      object_marker.type = visualization_msgs::Marker::SPHERE;
+      object_marker.type = visualization_msgs::msg::Marker::SPHERE;
       object_marker.scale.x = object_x_;
       object_marker.scale.y = object_y_;
       object_marker.scale.z = object_z_;
@@ -190,7 +198,7 @@ protected:
       object_marker.pose.orientation.w = 1.0;
     }
     else if(object_type_ == std::string("line")){
-      object_marker.type = visualization_msgs::Marker::LINE_LIST;
+      object_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
       object_marker.scale.x = line_width_;
       object_marker.color.r = object_r_;
       object_marker.color.g = object_g_;
@@ -200,7 +208,7 @@ protected:
       calculateBoundingBox(object_marker);
     }
     else if(object_type_ == std::string("mesh")){
-      object_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+      object_marker.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
       object_marker.scale.x = object_x_;
       object_marker.scale.y = object_y_;
       object_marker.scale.z = object_z_;
@@ -212,25 +220,25 @@ protected:
       object_marker.mesh_resource = mesh_file_;
     }
 
-    
-    visualization_msgs::InteractiveMarkerControl object_marker_control;
-    object_marker_control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+
+    visualization_msgs::msg::InteractiveMarkerControl object_marker_control;
+    object_marker_control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     object_marker_control.always_visible = true;
     object_marker_control.markers.push_back(object_marker);
     int_marker.controls.push_back(object_marker_control);
-  
-    visualization_msgs::InteractiveMarkerControl control;
+
+    visualization_msgs::msg::InteractiveMarkerControl control;
     if (show_6dof_circle_) {
       control.orientation.w = 1;
       control.orientation.x = 1;
       control.orientation.y = 0;
       control.orientation.z = 0;
-    
+
       control.name = "rotate_x";
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
       int_marker.controls.push_back(control);
       control.name = "move_x";
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
       int_marker.controls.push_back(control);
 
       control.orientation.w = 1;
@@ -238,10 +246,10 @@ protected:
       control.orientation.y = 1;
       control.orientation.z = 0;
       control.name = "rotate_z";
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
       int_marker.controls.push_back(control);
       control.name = "move_z";
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
       int_marker.controls.push_back(control);
 
       control.orientation.w = 1;
@@ -249,34 +257,37 @@ protected:
       control.orientation.y = 0;
       control.orientation.z = 1;
       control.name = "rotate_y";
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
       int_marker.controls.push_back(control);
       control.name = "move_y";
-      control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
       int_marker.controls.push_back(control);
     }
-  
+
     int_marker.scale = int_marker_scale_;
 
     server_->insert(int_marker,
-                    boost::bind(&Marker6DOF::processFeedbackCB, this, _1));
-    
+                    std::bind(&Marker6DOF::processFeedbackCB, this, std::placeholders::_1));
+
     menu_handler_.apply(*server_, "marker");
     server_->applyChanges();
   }
 
-  void publishTF(const geometry_msgs::PoseStamped& pose) {
-    tf::Transform transform;
-    tf::poseMsgToTF(pose.pose, transform);
-    tf_broadcaster_->sendTransform(tf::StampedTransform(
-                                     transform, pose.header.stamp,
-                                     pose.header.frame_id,
-                                     tf_frame_));
+  void publishTF(const geometry_msgs::msg::PoseStamped& pose) {
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.stamp = pose.header.stamp;
+    transform.header.frame_id = pose.header.frame_id;
+    transform.child_frame_id = tf_frame_;
+    transform.transform.translation.x = pose.pose.position.x;
+    transform.transform.translation.y = pose.pose.position.y;
+    transform.transform.translation.z = pose.pose.position.z;
+    transform.transform.rotation = pose.pose.orientation;
+    tf_broadcaster_->sendTransform(transform);
   }
-  
-  void processFeedbackCB(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback) {
-    boost::mutex::scoped_lock lock(mutex_);
-    geometry_msgs::PoseStamped pose;
+
+  void processFeedbackCB(visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    geometry_msgs::msg::PoseStamped pose;
     pose.header = feedback->header;
     pose.pose = feedback->pose;
 
@@ -284,10 +295,10 @@ protected:
       // feedback->header.frame_id equals to fixed frame of rviz.
       // Pose should be transformed respect to frame_id_ to publish correct tf frames.
       try {
-        tf_listener_->transformPose(frame_id_, pose, latest_pose_);
+        latest_pose_ = tf_buffer_->transform(pose, frame_id_);
       }
       catch (tf2::TransformException& e) {
-        ROS_ERROR_STREAM("Failed to transform " << pose.header.frame_id << " to " << frame_id_ << ": " << e.what());
+        RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to transform " << pose.header.frame_id << " to " << frame_id_ << ": " << e.what());
         return;
       }
     }
@@ -295,11 +306,12 @@ protected:
       latest_pose_ = pose;
     }
     if (!publish_pose_periodically_) {
-      pose_pub_.publish(pose);
+      pose_pub_->publish(pose);
     }
   }
 
-  void menuFeedbackCB(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback) {
+  void menuFeedbackCB(const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr& feedback) {
+    (void)feedback;
     show_6dof_circle_ = !show_6dof_circle_;
     if (show_6dof_circle_) {
       menu_handler_.setCheckState(circle_menu_entry_,
@@ -312,28 +324,28 @@ protected:
     initializeInteractiveMarker(); // ok...?
   }
 
-  void timerPoseCallback(const ros::TimerEvent& e) {
-    boost::mutex::scoped_lock lock(mutex_);
-    geometry_msgs::PoseStamped pose = latest_pose_;
-    pose.header.stamp = e.current_real;
+  void timerPoseCallback() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    geometry_msgs::msg::PoseStamped pose = latest_pose_;
+    pose.header.stamp = this->now();
     server_->setPose("marker", pose.pose, pose.header);
     server_->applyChanges();
     if (publish_pose_periodically_) {
-      pose_pub_.publish(pose);
+      pose_pub_->publish(pose);
     }
   }
 
-  void timerTFCallback(const ros::TimerEvent& e) {
-    boost::mutex::scoped_lock lock(mutex_);
-    geometry_msgs::PoseStamped pose = latest_pose_;
-    pose.header.stamp = e.current_real;
+  void timerTFCallback() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    geometry_msgs::msg::PoseStamped pose = latest_pose_;
+    pose.header.stamp = this->now();
     publishTF(pose);
   }
 
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
   interactive_markers::MenuHandler menu_handler_;
-  ros::Subscriber pose_stamped_sub_;
-  ros::Publisher pose_pub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_stamped_sub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
   std::string object_type_;
   double object_x_;
   double object_y_;
@@ -350,19 +362,20 @@ protected:
   bool publish_tf_;
   bool publish_pose_periodically_;
   std::string tf_frame_;
-  ros::Timer timer_pose_;
-  ros::Timer timer_tf_;
-  std::shared_ptr<tf::TransformBroadcaster> tf_broadcaster_;
-  std::shared_ptr<tf::TransformListener> tf_listener_;
-  boost::mutex mutex_;
+  rclcpp::TimerBase::SharedPtr timer_pose_;
+  rclcpp::TimerBase::SharedPtr timer_tf_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::mutex mutex_;
   interactive_markers::MenuHandler::EntryHandle circle_menu_entry_;
-  geometry_msgs::PoseStamped latest_pose_;
+  geometry_msgs::msg::PoseStamped latest_pose_;
 };
 
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "marker_6dof");
-  Marker6DOF marker;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<Marker6DOF>());
+  rclcpp::shutdown();
   return 0;
 }
