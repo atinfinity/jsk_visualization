@@ -4,6 +4,10 @@
 「ロード」列は `test_plugin_load` gtest(pluginlibでの生成+破棄、ViewControllerはライブラリ解決のみ)により**CIで毎回自動確認**される。
 「描画」列は実データを流した rviz2 での目視/無エラー確認(最終実施: 2026-07-04、DISPLAY=:1)。
 
+CIでは上記gtestに加え、launch_testingで
+「サンプルパブリッシャ13本が実際にトピックへ配信すること」
+(`test/test_samples_launch.py`)と全XMLの妥当性(`ament_xmllint`)を検証する。
+
 確認コマンド例:
 
 ```bash
@@ -30,7 +34,7 @@ ros2 launch jsk_rviz_plugins <サンプル>.launch.py
 | TFTrajectory | ✅ | ⬜ 手動 | 動くTFフレームが必要(例: robot_state_publisher) |
 | TwistStamped | ✅ | ⬜ 手動 | `ros2 topic pub ... geometry_msgs/msg/TwistStamped` |
 | PoseArray | ✅ | ⬜ 手動 | 非推奨(rviz標準のPoseArray推奨) |
-| CameraInfo | ✅ | ⬜ 手動 | カメラ or OverlayCamera検証用パブリッシャ |
+| CameraInfo | ✅ | ✅ | `overlay_camera_sample.launch.py` |
 | NormalDisplay | ✅ | ✅ | `normal_sample.launch.py` |
 | PeoplePositionMeasurementArray | ✅ | ⬜ 手動 | people_msgs/PositionMeasurementArray を配信 |
 | BoundingBox | ✅ | ⬜ 手動 | bbox サンプルの1要素版 |
@@ -45,7 +49,7 @@ ros2 launch jsk_rviz_plugins <サンプル>.launch.py
 | RvizScenePublisher | ✅ | ⬜ 手動 | X11必須(`ros2 topic hz /rviz/image` で確認) |
 | VideoCapture | ✅ | ⬜ 手動 | X11必須(start captureでaviが生成されるか) |
 | QuietInteractiveMarker | ✅ | ⬜ 手動 | interactive_markers サーバが必要 |
-| OverlayCamera | ✅ | ✅ | 合成Image+CameraInfoで確認済(2026-07-04) |
+| OverlayCamera | ✅ | ✅ | `overlay_camera_sample.launch.py` |
 
 ## Panels
 
