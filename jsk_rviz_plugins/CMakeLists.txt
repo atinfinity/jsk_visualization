@@ -170,6 +170,7 @@ install(PROGRAMS
   scripts/rviz_mouse_point_to_tablet.py
   test/test_overlay_text_interface.py
   samples/bounding_box_sample.py
+  samples/camera_sample.py
   samples/diagnostics_sample.py
   samples/footstep_sample.py
   samples/normal_sample.py
@@ -186,9 +187,13 @@ install(PROGRAMS
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+  ament_xmllint()
   find_package(launch_testing_ament_cmake REQUIRED)
   add_launch_test(test/test_overlay_text_interface_launch.py
     TIMEOUT 60)
+  add_launch_test(test/test_samples_launch.py
+    TIMEOUT 180)
   ament_add_gtest(test_plugin_load test/test_plugin_load.cpp
     SKIP_LINKING_MAIN_LIBRARIES)
   if(TARGET test_plugin_load)
