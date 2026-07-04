@@ -1,21 +1,21 @@
 #include <jsk_interactive_marker/transformable_object.h>
-#include <eigen_conversions/eigen_msg.h>
+#include <tf2_eigen/tf2_eigen.hpp>
 #include <math.h>
 
 #define PI 3.14159265
 
 using namespace jsk_interactive_marker;
 
-inline geometry_msgs::Pose inverse(geometry_msgs::Pose pose){
+inline geometry_msgs::msg::Pose inverse(geometry_msgs::msg::Pose pose){
   Eigen::Affine3d pose_eigen;
-  tf::poseMsgToEigen(pose, pose_eigen);
-  tf::poseEigenToMsg(pose_eigen.inverse(), pose);
+  tf2::fromMsg(pose, pose_eigen);
+  pose = tf2::toMsg(pose_eigen.inverse());
   return pose;
 }
 
 
 TransformableObject::TransformableObject(){
-  ROS_INFO("Init TransformableObject");
+  RCLCPP_INFO(rclcpp::get_logger("TransformableObject"), "Init TransformableObject");
   control_offset_pose_.orientation.x = 0;
   control_offset_pose_.orientation.y = 0;
   control_offset_pose_.orientation.z = 0;
@@ -42,20 +42,20 @@ void TransformableObject::setInteractiveMarkerSetting(const InteractiveSettingCo
   interaction_mode_ = static_cast<unsigned int>(config.interaction_mode);
 }
 
-std::vector<visualization_msgs::InteractiveMarkerControl> TransformableObject::makeRotateTransFixControl(unsigned int orientation_mode){
-  visualization_msgs::InteractiveMarkerControl control;
+std::vector<visualization_msgs::msg::InteractiveMarkerControl> TransformableObject::makeRotateTransFixControl(unsigned int orientation_mode){
+  visualization_msgs::msg::InteractiveMarkerControl control;
 
-  std::vector<visualization_msgs::InteractiveMarkerControl> controls;
+  std::vector<visualization_msgs::msg::InteractiveMarkerControl> controls;
   control.orientation_mode = orientation_mode;
   control.orientation.w = 1;
   control.orientation.x = 1;
   control.orientation.y = 0;
   control.orientation.z = 0;
   control.name = "rotate_x";
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   controls.push_back(control);
   control.name = "move_x";
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   controls.push_back(control);
 
   control.orientation.w = 1;
@@ -63,10 +63,10 @@ std::vector<visualization_msgs::InteractiveMarkerControl> TransformableObject::m
   control.orientation.y = 1;
   control.orientation.z = 0;
   control.name = "rotate_z";
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   controls.push_back(control);
   control.name = "move_z";
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   controls.push_back(control);
 
   control.orientation.w = 1;
@@ -74,35 +74,35 @@ std::vector<visualization_msgs::InteractiveMarkerControl> TransformableObject::m
   control.orientation.y = 0;
   control.orientation.z = 1;
   control.name = "rotate_y";
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
   controls.push_back(control);
   control.name = "move_y";
-  control.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
   controls.push_back(control);
 
   return controls;
 };
 
-void TransformableObject::addMarker(visualization_msgs::InteractiveMarker &int_marker, bool always_visible, unsigned int interaction_mode)
+void TransformableObject::addMarker(visualization_msgs::msg::InteractiveMarker &int_marker, bool always_visible, unsigned int interaction_mode)
 {
-  visualization_msgs::Marker marker = getVisualizationMsgMarker();
-  visualization_msgs::InteractiveMarkerControl marker_control;
+  visualization_msgs::msg::Marker marker = getVisualizationMsgMarker();
+  visualization_msgs::msg::InteractiveMarkerControl marker_control;
   marker_control.always_visible = always_visible;
   marker_control.markers.push_back(marker);
   marker_control.interaction_mode = interaction_mode;
   int_marker.controls.push_back(marker_control);
 };
 
-void TransformableObject::addControl(visualization_msgs::InteractiveMarker &int_marker)
+void TransformableObject::addControl(visualization_msgs::msg::InteractiveMarker &int_marker)
 {
   if(display_interactive_manipulator_){
-    std::vector<visualization_msgs::InteractiveMarkerControl> rotate_controls = makeRotateTransFixControl(interactive_manipulator_orientation_);
+    std::vector<visualization_msgs::msg::InteractiveMarkerControl> rotate_controls = makeRotateTransFixControl(interactive_manipulator_orientation_);
     int_marker.controls.insert(int_marker.controls.end(), rotate_controls.begin(), rotate_controls.end());
   }
 };
 
-visualization_msgs::InteractiveMarker TransformableObject::getInteractiveMarker(){
-  visualization_msgs::InteractiveMarker int_marker;
+visualization_msgs::msg::InteractiveMarker TransformableObject::getInteractiveMarker(){
+  visualization_msgs::msg::InteractiveMarker int_marker;
 
   addMarker(int_marker, true, interaction_mode_);
   addControl(int_marker);
@@ -118,42 +118,41 @@ visualization_msgs::InteractiveMarker TransformableObject::getInteractiveMarker(
   return int_marker;
 };
 
-void TransformableObject::setPose(geometry_msgs::Pose pose, bool for_interactive_control){
+void TransformableObject::setPose(geometry_msgs::msg::Pose pose, bool for_interactive_control){
   if(for_interactive_control) {
     pose_ = pose;
   }
   else {
     Eigen::Affine3d control_offset_eigen;
-    tf::poseMsgToEigen(control_offset_pose_, control_offset_eigen);
+    tf2::fromMsg(control_offset_pose_, control_offset_eigen);
     Eigen::Affine3d pose_eigen;
-    tf::poseMsgToEigen(pose, pose_eigen);
-    tf::poseEigenToMsg(pose_eigen * control_offset_eigen, pose_);
+    tf2::fromMsg(pose, pose_eigen);
+    pose_ = tf2::toMsg(pose_eigen * control_offset_eigen);
   }
 }
 
-geometry_msgs::Pose TransformableObject::getPose(bool for_interactive_control){
+geometry_msgs::msg::Pose TransformableObject::getPose(bool for_interactive_control){
   if(for_interactive_control) {
     return pose_;
   }
   else{
-    geometry_msgs::Pose pose;
+    geometry_msgs::msg::Pose pose;
     Eigen::Affine3d control_offset_eigen;
-    tf::poseMsgToEigen(control_offset_pose_, control_offset_eigen);
+    tf2::fromMsg(control_offset_pose_, control_offset_eigen);
     Eigen::Affine3d pose_eigen;
-    tf::poseMsgToEigen(pose_, pose_eigen);
-    tf::poseEigenToMsg(pose_eigen * control_offset_eigen.inverse(), pose);
-    //return pose;
+    tf2::fromMsg(pose_, pose_eigen);
+    pose = tf2::toMsg(pose_eigen * control_offset_eigen.inverse());
     return pose;
   }
 }
 
 
-void TransformableObject::addPose(geometry_msgs::Pose msg, bool relative){
+void TransformableObject::addPose(geometry_msgs::msg::Pose msg, bool relative){
   Eigen::Vector3d original_p(msg.position.x, msg.position.y, msg.position.z);
   Eigen::Quaterniond original_q;
-  tf::quaternionMsgToEigen(pose_.orientation, original_q);
+  tf2::fromMsg(pose_.orientation, original_q);
   Eigen::Quaterniond diff_q;
-  tf::quaternionMsgToEigen(msg.orientation, diff_q);
+  tf2::fromMsg(msg.orientation, diff_q);
   Eigen::Quaterniond updated_q;
   if(relative) {
      original_p = Eigen::Affine3d(original_q) * original_p;
@@ -166,13 +165,20 @@ void TransformableObject::addPose(geometry_msgs::Pose msg, bool relative){
   pose_.position.x += original_p[0];
   pose_.position.y += original_p[1];
   pose_.position.z += original_p[2];
-  tf::quaternionEigenToMsg(updated_q, pose_.orientation);
+  pose_.orientation = tf2::toMsg(updated_q);
 }
 
-void TransformableObject::publishTF(){
-  tf::Transform transform;
-  tf::poseMsgToTF(getPose(), transform);
-  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), frame_id_, name_));
+void TransformableObject::publishTF(tf2_ros::TransformBroadcaster &br, const rclcpp::Time &stamp){
+  geometry_msgs::msg::Pose pose = getPose();
+  geometry_msgs::msg::TransformStamped transform;
+  transform.header.stamp = stamp;
+  transform.header.frame_id = frame_id_;
+  transform.child_frame_id = name_;
+  transform.transform.translation.x = pose.position.x;
+  transform.transform.translation.y = pose.position.y;
+  transform.transform.translation.z = pose.position.z;
+  transform.transform.rotation = pose.orientation;
+  br.sendTransform(transform);
 }
 
 namespace jsk_interactive_marker{
@@ -183,15 +189,15 @@ namespace jsk_interactive_marker{
     cylinder_g_ = g;
     cylinder_b_ = b;
     cylinder_a_ = a;
-    marker_.type = visualization_msgs::Marker::CYLINDER;
-    type_ = jsk_rviz_plugins::TransformableMarkerOperate::CYLINDER;
+    marker_.type = visualization_msgs::msg::Marker::CYLINDER;
+    type_ = jsk_rviz_plugins_msgs::msg::TransformableMarkerOperate::SHAPE_CYLINDER;
 
     frame_id_ = frame;
     name_ = name;
     description_ = description;
   }
 
-  visualization_msgs::Marker TransformableCylinder::getVisualizationMsgMarker(){
+  visualization_msgs::msg::Marker TransformableCylinder::getVisualizationMsgMarker(){
     marker_.scale.x = cylinder_radius_ * 2.0;
     marker_.scale.y = cylinder_radius_ * 2.0;
     marker_.scale.z = cylinder_z_;
@@ -213,8 +219,8 @@ namespace jsk_interactive_marker{
     torus_g_ = g;
     torus_b_ = b;
     torus_a_ = a;
-    marker_.type = visualization_msgs::Marker::TRIANGLE_LIST;
-    type_ = jsk_rviz_plugins::TransformableMarkerOperate::TORUS;
+    marker_.type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
+    type_ = jsk_rviz_plugins_msgs::msg::TransformableMarkerOperate::SHAPE_TORUS;
 
     frame_id_ = frame;
     name_ = name;
@@ -224,19 +230,17 @@ namespace jsk_interactive_marker{
     v_division_num_ = v_div;
   }
 
-  std::vector<geometry_msgs::Point > TransformableTorus::calcurateTriangleMesh(){
-    std::vector<geometry_msgs::Point> triangle_mesh;
-    float center_x = 0;
-    float center_y = 0;
+  std::vector<geometry_msgs::msg::Point > TransformableTorus::calcurateTriangleMesh(){
+    std::vector<geometry_msgs::msg::Point> triangle_mesh;
     float u_division_num = u_division_num_;
     float v_division_num = v_division_num_;
-    std::vector<std::vector<geometry_msgs::Point> > points_array;
+    std::vector<std::vector<geometry_msgs::msg::Point> > points_array;
     for (int i = 0; i < u_division_num; i ++){
-      std::vector<geometry_msgs::Point> points;
+      std::vector<geometry_msgs::msg::Point> points;
       float target_circle_x = torus_radius_ * cos( ( i / u_division_num) * 2 * PI) ;
       float target_circle_y = torus_radius_ * sin( ( i / u_division_num) * 2 * PI) ;
       for (int j = 0; j < v_division_num; j++){
-        geometry_msgs::Point new_point;
+        geometry_msgs::msg::Point new_point;
         new_point.x = target_circle_x + torus_small_radius_ * cos ( (j / v_division_num) * 2 * PI) * cos( ( i / u_division_num) * 2 * PI);
         new_point.y = target_circle_y + torus_small_radius_ * cos ( (j / v_division_num) * 2 * PI) * sin( ( i / u_division_num) * 2 * PI);
         new_point.z = torus_small_radius_ * sin ( (j / v_division_num) * 2 * PI);
@@ -247,14 +251,14 @@ namespace jsk_interactive_marker{
 
     //create mesh list;
     for(int i = 0; i < u_division_num; i++){
-      std::vector<geometry_msgs::Point> target_points = points_array[i];
+      std::vector<geometry_msgs::msg::Point> target_points = points_array[i];
       float prev_index = i - 1, next_index = i + 1;
       if(prev_index < 0)
         prev_index = u_division_num - 1;
       if(next_index > u_division_num - 1)
         next_index = 0;
-      std::vector<geometry_msgs::Point> prev_points = points_array[prev_index];
-      std::vector<geometry_msgs::Point> next_points = points_array[next_index];
+      std::vector<geometry_msgs::msg::Point> prev_points = points_array[prev_index];
+      std::vector<geometry_msgs::msg::Point> next_points = points_array[next_index];
       for(int j = 0; j < v_division_num; j++){
         float next_point_index = j + 1;
         if( next_point_index > v_division_num - 1)
@@ -273,7 +277,7 @@ namespace jsk_interactive_marker{
     return triangle_mesh;
   }
 
-  visualization_msgs::Marker TransformableTorus::getVisualizationMsgMarker(){
+  visualization_msgs::msg::Marker TransformableTorus::getVisualizationMsgMarker(){
     marker_.points = calcurateTriangleMesh();
     marker_.color.r = torus_r_;
     marker_.color.g = torus_g_;
@@ -292,7 +296,7 @@ namespace jsk_interactive_marker{
     box_g_ = g;
     box_b_ = b;
     box_a_ = a;
-    marker_.type = visualization_msgs::Marker::CUBE;
+    marker_.type = visualization_msgs::msg::Marker::CUBE;
 
     frame_id_ = frame;
     name_ = name;
@@ -307,15 +311,15 @@ namespace jsk_interactive_marker{
     box_g_ = g;
     box_b_ = b;
     box_a_ = a;
-    marker_.type = visualization_msgs::Marker::CUBE;
-    type_ = jsk_rviz_plugins::TransformableMarkerOperate::BOX;
+    marker_.type = visualization_msgs::msg::Marker::CUBE;
+    type_ = jsk_rviz_plugins_msgs::msg::TransformableMarkerOperate::SHAPE_BOX;
 
     frame_id_ = frame;
     name_ = name;
     description_ = description;
   }
 
-  visualization_msgs::Marker TransformableBox::getVisualizationMsgMarker(){
+  visualization_msgs::msg::Marker TransformableBox::getVisualizationMsgMarker(){
     marker_.scale.x = box_x_;
     marker_.scale.y = box_y_;
     marker_.scale.z = box_z_;
@@ -331,8 +335,8 @@ namespace jsk_interactive_marker{
 
   TransformableMesh::TransformableMesh( std::string frame, std::string name, std::string description, std::string mesh_resource, bool mesh_use_embedded_materials){
     marker_scale_ = 0.5;
-    marker_.type = visualization_msgs::Marker::MESH_RESOURCE;
-    type_ = jsk_rviz_plugins::TransformableMarkerOperate::MESH_RESOURCE;
+    marker_.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
+    type_ = jsk_rviz_plugins_msgs::msg::TransformableMarkerOperate::SHAPE_MESH_RESOURCE;
     mesh_resource_ = mesh_resource;
     mesh_use_embedded_materials_ = mesh_use_embedded_materials;
     frame_id_ = frame;
@@ -340,7 +344,7 @@ namespace jsk_interactive_marker{
     description_ = description;
   }
 
-  visualization_msgs::Marker TransformableMesh::getVisualizationMsgMarker(){
+  visualization_msgs::msg::Marker TransformableMesh::getVisualizationMsgMarker(){
     marker_.mesh_resource = mesh_resource_;
     marker_.mesh_use_embedded_materials = mesh_use_embedded_materials_;
     marker_.scale.x = 1.0;

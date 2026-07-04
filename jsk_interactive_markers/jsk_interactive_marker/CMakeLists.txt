@@ -80,8 +80,36 @@ endmacro()
 im_add_executable(marker_6dof src/marker_6dof.cpp)
 im_add_executable(bounding_box_marker src/bounding_box_marker.cpp)
 
-# --- ported group by group ---
 # Group (b): transformable core
+add_library(transformable_core SHARED
+  src/transformable_object.cpp
+  src/yaml_menu_handler.cpp
+  src/parent_and_child_interactive_marker_server.cpp
+  src/transformable_interactive_server.cpp)
+target_include_directories(transformable_core PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+target_link_libraries(transformable_core PUBLIC ${COMMON_DEPS_TARGETS})
+install(TARGETS transformable_core
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+
+im_add_executable(transformable_server_sample src/transformable_server_sample.cpp)
+target_link_libraries(transformable_server_sample PRIVATE transformable_core)
+
+# rviz panel plugin
+add_library(jsk_interactive_marker_rviz_plugins SHARED
+  src/rviz_plugins/transformable_marker_operator.cpp)
+target_include_directories(jsk_interactive_marker_rviz_plugins PRIVATE include)
+target_compile_definitions(jsk_interactive_marker_rviz_plugins PRIVATE QT_NO_KEYWORDS)
+target_link_libraries(jsk_interactive_marker_rviz_plugins PUBLIC
+  Qt5::Widgets
+  rviz_common::rviz_common
+  ${COMMON_DEPS_TARGETS})
+install(TARGETS jsk_interactive_marker_rviz_plugins
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
+
+# --- ported group by group ---
 # Group (c): point_cloud_config_marker triangle_foot door_foot polygon_marker world2yaml
 # Group (d): interactive_point_cloud pointcloud_cropper
 # Group (e): urdf_model_marker urdf_control_marker interactive_marker_interface camera_info_publisher

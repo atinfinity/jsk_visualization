@@ -1,58 +1,62 @@
 #ifndef __TRANSFORMABLE_INTERACTIVE_SERVER_H__
 #define __TRANSFORMABLE_INTERACTIVE_SERVER_H__
 
-#include <ros/ros.h>
-#include <interactive_markers/interactive_marker_server.h>
+#include <rclcpp/rclcpp.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
 #include <jsk_interactive_marker/transformable_object.h>
 #include <jsk_interactive_marker/yaml_menu_handler.h>
 #include <jsk_interactive_marker/parent_and_child_interactive_marker_server.h>
-#include <std_msgs/Float32.h>
-#include <std_msgs/String.h>
-#include <std_srvs/Empty.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <std_srvs/srv/empty.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <map>
-#include <jsk_rviz_plugins/OverlayText.h>
+#include <mutex>
+#include <jsk_rviz_plugins_msgs/msg/overlay_text.hpp>
 #include <iostream>
 #include <sstream>
-#include <tf/transform_listener.h>
-#include <dynamic_reconfigure/server.h>
-#include <jsk_interactive_marker/InteractiveSettingConfig.h>
-#include <jsk_interactive_marker/GetTransformableMarkerPose.h>
-#include <jsk_interactive_marker/SetTransformableMarkerPose.h>
-#include <jsk_interactive_marker/GetTransformableMarkerColor.h>
-#include <jsk_interactive_marker/SetTransformableMarkerColor.h>
-#include <jsk_interactive_marker/GetTransformableMarkerFocus.h>
-#include <jsk_interactive_marker/SetTransformableMarkerFocus.h>
-#include <jsk_interactive_marker/GetMarkerDimensions.h>
-#include <jsk_interactive_marker/SetMarkerDimensions.h>
-#include <jsk_interactive_marker/GetType.h>
-#include <jsk_interactive_marker/GetTransformableMarkerExistence.h>
-#include <jsk_interactive_marker/MarkerDimensions.h>
-#include <jsk_interactive_marker/PoseStampedWithName.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <rcl_interfaces/msg/parameter_descriptor.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <jsk_interactive_marker_msgs/srv/get_transformable_marker_pose.hpp>
+#include <jsk_interactive_marker_msgs/srv/set_transformable_marker_pose.hpp>
+#include <jsk_interactive_marker_msgs/srv/get_transformable_marker_color.hpp>
+#include <jsk_interactive_marker_msgs/srv/set_transformable_marker_color.hpp>
+#include <jsk_interactive_marker_msgs/srv/get_transformable_marker_focus.hpp>
+#include <jsk_interactive_marker_msgs/srv/set_transformable_marker_focus.hpp>
+#include <jsk_interactive_marker_msgs/srv/get_marker_dimensions.hpp>
+#include <jsk_interactive_marker_msgs/srv/set_marker_dimensions.hpp>
+#include <jsk_interactive_marker_msgs/srv/get_type.hpp>
+#include <jsk_interactive_marker_msgs/srv/get_transformable_marker_existence.hpp>
+#include <jsk_interactive_marker_msgs/msg/marker_dimensions.hpp>
+#include <jsk_interactive_marker_msgs/msg/pose_stamped_with_name.hpp>
+#include <jsk_rviz_plugins_msgs/srv/request_marker_operate.hpp>
 
 using namespace std;
 
 namespace jsk_interactive_marker
 {
-  class TransformableInteractiveServer{
+  class TransformableInteractiveServer: public rclcpp::Node{
   public:
     TransformableInteractiveServer();
     ~TransformableInteractiveServer();
 
-    void processFeedback( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
-    void setRadius(std_msgs::Float32 msg);
-    void setSmallRadius(std_msgs::Float32 msg);
-    void setX(std_msgs::Float32 msg);
-    void setY(std_msgs::Float32 msg);
-    void setZ(std_msgs::Float32 msg);
+    void processFeedback( visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback );
+    void setRadius(std_msgs::msg::Float32 msg);
+    void setSmallRadius(std_msgs::msg::Float32 msg);
+    void setX(std_msgs::msg::Float32 msg);
+    void setY(std_msgs::msg::Float32 msg);
+    void setZ(std_msgs::msg::Float32 msg);
 
-    void setPose( const geometry_msgs::PoseStampedConstPtr &msg_ptr , bool for_interactive_control=false);
-    void addPose(geometry_msgs::Pose msg);
-    void addPoseRelative(geometry_msgs::Pose msg);
+    void setPose( const geometry_msgs::msg::PoseStamped::ConstSharedPtr &msg_ptr , bool for_interactive_control=false);
+    void addPose(geometry_msgs::msg::Pose msg);
+    void addPoseRelative(geometry_msgs::msg::Pose msg);
 
-    void setControlRelativePose(geometry_msgs::Pose msg);
+    void setControlRelativePose(geometry_msgs::msg::Pose msg);
 
-    void setColor(std_msgs::ColorRGBA msg);
+    void setColor(std_msgs::msg::ColorRGBA msg);
 
     void insertNewBox( std::string frame_id, std::string name, std::string description );
     void insertNewCylinder( std::string frame_id, std::string name, std::string description );
@@ -64,94 +68,96 @@ namespace jsk_interactive_marker
     void eraseAllObject();
     void eraseFocusObject();
 
-    void run();
     void focusTextPublish();
     void focusPosePublish();
     void focusObjectMarkerNamePublish();
     void focusInteractiveManipulatorDisplay();
 
-    void enableInteractiveManipulatorDisplay(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback,
+    void enableInteractiveManipulatorDisplay(const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback,
                                              const bool enable);
 
     void updateTransformableObject(TransformableObject* tobject);
 
-    bool getPoseService(jsk_interactive_marker::GetTransformableMarkerPose::Request &req,jsk_interactive_marker::GetTransformableMarkerPose::Response &res, bool for_interactive_control);
-    bool setPoseService(jsk_interactive_marker::SetTransformableMarkerPose::Request &req,jsk_interactive_marker::SetTransformableMarkerPose::Response &res, bool for_interactive_control);
-    bool getColorService(jsk_interactive_marker::GetTransformableMarkerColor::Request &req,jsk_interactive_marker::GetTransformableMarkerColor::Response &res);
-    bool setColorService(jsk_interactive_marker::SetTransformableMarkerColor::Request &req,jsk_interactive_marker::SetTransformableMarkerColor::Response &res);
-    bool getFocusService(jsk_interactive_marker::GetTransformableMarkerFocus::Request &req,jsk_interactive_marker::GetTransformableMarkerFocus::Response &res);
-    bool setFocusService(jsk_interactive_marker::SetTransformableMarkerFocus::Request &req,jsk_interactive_marker::SetTransformableMarkerFocus::Response &res);
-    bool getTypeService(jsk_interactive_marker::GetType::Request &req,jsk_interactive_marker::GetType::Response &res);
-    bool getExistenceService(jsk_interactive_marker::GetTransformableMarkerExistence::Request &req,jsk_interactive_marker::GetTransformableMarkerExistence::Response &res);
-    bool setDimensionsService(jsk_interactive_marker::SetMarkerDimensions::Request &req,jsk_interactive_marker::SetMarkerDimensions::Response &res);
-    bool getDimensionsService(jsk_interactive_marker::GetMarkerDimensions::Request &req,jsk_interactive_marker::GetMarkerDimensions::Response &res);
-    bool hideService(std_srvs::Empty::Request& req,
-                     std_srvs::Empty::Response& res);
-    bool showService(std_srvs::Empty::Request& req,
-                     std_srvs::Empty::Response& res);
+    void getPoseService(const jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose::Response::SharedPtr res, bool for_interactive_control);
+    void setPoseService(const jsk_interactive_marker_msgs::srv::SetTransformableMarkerPose::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::SetTransformableMarkerPose::Response::SharedPtr res, bool for_interactive_control);
+    void getColorService(const jsk_interactive_marker_msgs::srv::GetTransformableMarkerColor::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetTransformableMarkerColor::Response::SharedPtr res);
+    void setColorService(const jsk_interactive_marker_msgs::srv::SetTransformableMarkerColor::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::SetTransformableMarkerColor::Response::SharedPtr res);
+    void getFocusService(const jsk_interactive_marker_msgs::srv::GetTransformableMarkerFocus::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetTransformableMarkerFocus::Response::SharedPtr res);
+    void setFocusService(const jsk_interactive_marker_msgs::srv::SetTransformableMarkerFocus::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::SetTransformableMarkerFocus::Response::SharedPtr res);
+    void getTypeService(const jsk_interactive_marker_msgs::srv::GetType::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetType::Response::SharedPtr res);
+    void getExistenceService(const jsk_interactive_marker_msgs::srv::GetTransformableMarkerExistence::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetTransformableMarkerExistence::Response::SharedPtr res);
+    void setDimensionsService(const jsk_interactive_marker_msgs::srv::SetMarkerDimensions::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::SetMarkerDimensions::Response::SharedPtr res);
+    void getDimensionsService(const jsk_interactive_marker_msgs::srv::GetMarkerDimensions::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetMarkerDimensions::Response::SharedPtr res);
+    void hideService(const std_srvs::srv::Empty::Request::SharedPtr req,
+                     std_srvs::srv::Empty::Response::SharedPtr res);
+    void showService(const std_srvs::srv::Empty::Request::SharedPtr req,
+                     std_srvs::srv::Empty::Response::SharedPtr res);
     void publishMarkerDimensions();
 
-    bool requestMarkerOperateService(jsk_rviz_plugins::RequestMarkerOperate::Request &req,jsk_rviz_plugins::RequestMarkerOperate::Response &res);
-    virtual void configCallback(InteractiveSettingConfig &config, uint32_t level);
+    void requestMarkerOperateService(const jsk_rviz_plugins_msgs::srv::RequestMarkerOperate::Request::SharedPtr req, jsk_rviz_plugins_msgs::srv::RequestMarkerOperate::Response::SharedPtr res);
+    // parameter callback replacing the dynamic_reconfigure configCallback in ROS 1
+    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
+    void declareInteractiveSettingParameters();
     void SetInitialInteractiveMarkerConfig( TransformableObject* tobject );
 
-    void tfTimerCallback(const ros::TimerEvent&);
-    bool setPoseWithTfTransformation(TransformableObject* tobject, geometry_msgs::PoseStamped pose_stamped, bool for_interactive_control=false);
-    
+    void tfTimerCallback();
+    bool setPoseWithTfTransformation(TransformableObject* tobject, geometry_msgs::msg::PoseStamped pose_stamped, bool for_interactive_control=false);
+
     std::string focus_object_marker_name_;
-    ros::NodeHandle* n_;
 
-    boost::mutex mutex_;
+    std::mutex mutex_;
 
-    ros::Subscriber setcolor_sub_;
-    ros::Subscriber setpose_sub_;
-    ros::Subscriber setcontrolpose_sub_;
-    ros::Subscriber addpose_sub_;
-    ros::Subscriber addpose_relative_sub_;
-    
-    ros::Subscriber setcontrol_relative_sub_;
-    
-    ros::Subscriber set_r_sub_;
-    ros::Subscriber set_sm_r_sub_;
-    ros::Subscriber set_h_sub_;
-    ros::Subscriber set_x_sub_;
-    ros::Subscriber set_y_sub_;
-    ros::Subscriber set_z_sub_;
-    
-    ros::ServiceServer hide_srv_;
-    ros::ServiceServer show_srv_;
-    ros::ServiceServer get_pose_srv_;
-    ros::ServiceServer get_control_pose_srv_;
-    ros::ServiceServer set_pose_srv_;
-    ros::ServiceServer set_control_pose_srv_;
-    ros::ServiceServer get_color_srv_;
-    ros::ServiceServer set_color_srv_;
-    ros::ServiceServer get_focus_srv_;
-    ros::ServiceServer set_focus_srv_;
-    ros::ServiceServer get_type_srv_;
-    ros::ServiceServer get_exist_srv_;
-    ros::ServiceServer set_dimensions_srv;
-    ros::ServiceServer get_dimensions_srv;
-    ros::Publisher marker_dimensions_pub_;
-    ros::ServiceServer request_marker_operate_srv_;
+    rclcpp::Subscription<std_msgs::msg::ColorRGBA>::SharedPtr setcolor_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr setpose_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr setcontrolpose_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr addpose_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr addpose_relative_sub_;
 
-    std::shared_ptr <dynamic_reconfigure::Server<InteractiveSettingConfig> > config_srv_;
+    rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr setcontrol_relative_sub_;
 
-    ros::Subscriber setrad_sub_;
-    ros::Publisher focus_name_text_pub_;
-    ros::Publisher focus_pose_text_pub_;
-    ros::Publisher focus_object_marker_name_pub_;
-    ros::Publisher pose_pub_;
-    ros::Publisher pose_with_name_pub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr set_r_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr set_sm_r_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr set_h_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr set_x_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr set_y_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr set_z_sub_;
+
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr hide_srv_;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr show_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose>::SharedPtr get_pose_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose>::SharedPtr get_control_pose_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::SetTransformableMarkerPose>::SharedPtr set_pose_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::SetTransformableMarkerPose>::SharedPtr set_control_pose_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetTransformableMarkerColor>::SharedPtr get_color_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::SetTransformableMarkerColor>::SharedPtr set_color_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetTransformableMarkerFocus>::SharedPtr get_focus_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::SetTransformableMarkerFocus>::SharedPtr set_focus_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetType>::SharedPtr get_type_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetTransformableMarkerExistence>::SharedPtr get_exist_srv_;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::SetMarkerDimensions>::SharedPtr set_dimensions_srv;
+    rclcpp::Service<jsk_interactive_marker_msgs::srv::GetMarkerDimensions>::SharedPtr get_dimensions_srv;
+    rclcpp::Publisher<jsk_interactive_marker_msgs::msg::MarkerDimensions>::SharedPtr marker_dimensions_pub_;
+    rclcpp::Service<jsk_rviz_plugins_msgs::srv::RequestMarkerOperate>::SharedPtr request_marker_operate_srv_;
+
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr setrad_sub_;
+    rclcpp::Publisher<jsk_rviz_plugins_msgs::msg::OverlayText>::SharedPtr focus_name_text_pub_;
+    rclcpp::Publisher<jsk_rviz_plugins_msgs::msg::OverlayText>::SharedPtr focus_pose_text_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr focus_object_marker_name_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
+    rclcpp::Publisher<jsk_interactive_marker_msgs::msg::PoseStampedWithName>::SharedPtr pose_with_name_pub_;
     interactive_markers::InteractiveMarkerServer* server_;
     map<string, TransformableObject*> transformable_objects_map_;
-    std::shared_ptr<tf::TransformListener> tf_listener_;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     int torus_udiv_;
     int torus_vdiv_;
     jsk_interactive_marker::InteractiveSettingConfig config_;
     bool strict_tf_;
     int interactive_manipulator_orientation_;
-    ros::Timer tf_timer;
+    rclcpp::TimerBase::SharedPtr tf_timer;
     std::shared_ptr <YamlMenuHandler> yaml_menu_handler_ptr_;
   };
 }

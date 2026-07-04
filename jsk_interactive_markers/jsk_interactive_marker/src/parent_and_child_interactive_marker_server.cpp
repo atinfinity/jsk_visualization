@@ -1,99 +1,127 @@
 #include <jsk_interactive_marker/parent_and_child_interactive_marker_server.h>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+using std::placeholders::_1;
+using std::placeholders::_2;
 
 namespace jsk_interactive_marker
 {
-  ParentAndChildInteractiveMarkerServer::ParentAndChildInteractiveMarkerServer(const std::string &topic_ns, const std::string &server_id, bool spin_thread) : InteractiveMarkerServer(topic_ns, server_id, spin_thread)
+  ParentAndChildInteractiveMarkerServer::ParentAndChildInteractiveMarkerServer(const std::string &topic_ns, rclcpp::Node::SharedPtr node) : InteractiveMarkerServer(topic_ns, node), node_(node)
   {
     topic_server_name_ = topic_ns;
+    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     std::string get_marker_pose_service_name = topic_ns + "/get_marker_pose";
     std::string set_parent_service_name = topic_ns + "/set_parent_marker";
     std::string remove_parent_service_name = topic_ns + "/remove_parent_marker";
-    get_marker_pose_srv_ = n_.advertiseService(get_marker_pose_service_name, &ParentAndChildInteractiveMarkerServer::getMarkerPoseService, this);
-    set_parent_srv_ = n_.advertiseService(set_parent_service_name, &ParentAndChildInteractiveMarkerServer::setParentService, this);
-    remove_parent_srv_ = n_.advertiseService(remove_parent_service_name, &ParentAndChildInteractiveMarkerServer::removeParentService, this);
+    get_marker_pose_srv_ = node_->create_service<jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose>(get_marker_pose_service_name, std::bind(&ParentAndChildInteractiveMarkerServer::getMarkerPoseService, this, _1, _2));
+    set_parent_srv_ = node_->create_service<jsk_interactive_marker_msgs::srv::SetParentMarker>(set_parent_service_name, std::bind(&ParentAndChildInteractiveMarkerServer::setParentService, this, _1, _2));
+    remove_parent_srv_ = node_->create_service<jsk_interactive_marker_msgs::srv::RemoveParentMarker>(remove_parent_service_name, std::bind(&ParentAndChildInteractiveMarkerServer::removeParentService, this, _1, _2));
   }
-  bool ParentAndChildInteractiveMarkerServer::setParentService(jsk_interactive_marker::SetParentMarker::Request &req, jsk_interactive_marker::SetParentMarker::Response &res)
+  void ParentAndChildInteractiveMarkerServer::setParentService(const jsk_interactive_marker_msgs::srv::SetParentMarker::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::SetParentMarker::Response::SharedPtr res)
   {
-    geometry_msgs::PoseStamped child_pose_stamped;
+    (void)res;
+    geometry_msgs::msg::PoseStamped child_pose_stamped;
     // get current pose stamped
-    getMarkerPose(req.child_marker_name, child_pose_stamped);
-    if (req.parent_topic_name == std::string("") || topic_server_name_ == req.parent_topic_name) // self association
+    getMarkerPose(req->child_marker_name, child_pose_stamped);
+    if (req->parent_topic_name == std::string("") || topic_server_name_ == req->parent_topic_name) // self association
     {
-      if (!registerAssociationItself(req.parent_marker_name, topic_server_name_, req.child_marker_name, child_pose_stamped))
-        return false;
+      if (!registerAssociationItself(req->parent_marker_name, topic_server_name_, req->child_marker_name, child_pose_stamped))
+        return;
     }
     else{ // refer to different server
-      if (registerAssociationWithOtherNode(req.parent_marker_name, req.parent_topic_name, req.child_marker_name, child_pose_stamped))
-      {
-
-        if (parent_subscriber_nums_.find(req.parent_topic_name) == parent_subscriber_nums_.end() || parent_subscriber_nums_[req.parent_topic_name] == 0 )
-        {
-          // register subscriber
-          parent_subscriber_nums_[req.parent_topic_name] = 1;
-          parent_update_subscribers_[req.parent_topic_name] = n_.subscribe<visualization_msgs::InteractiveMarkerUpdate>(req.parent_topic_name + "/update", 1, boost::bind(&ParentAndChildInteractiveMarkerServer::parentUpdateCb, this, _1, req.parent_topic_name));
-          parent_feedback_subscribers_[req.parent_topic_name] = n_.subscribe<visualization_msgs::InteractiveMarkerFeedback>(req.parent_topic_name + "/feedback", 1, boost::bind(&ParentAndChildInteractiveMarkerServer::parentFeedbackCb, this, _1, req.parent_topic_name));
-        }
-        else
-        {
-          parent_subscriber_nums_[req.parent_topic_name] += 1;
-        }
-      }
-      else
-      {
-        return false;
-      }
+      // NOTE: the parent pose is acquired asynchronously in ROS 2;
+      // registration of the association and of the parent subscribers is
+      // completed in the service response callback.
+      registerAssociationWithOtherNode(req->parent_marker_name, req->parent_topic_name, req->child_marker_name, child_pose_stamped, /*register_parent_subscriber=*/true);
     }
-    if (! (callback_map_.find(req.child_marker_name)!=callback_map_.end()))
+    if (! (callback_map_.find(req->child_marker_name)!=callback_map_.end()))
     {
-      setCallback(req.child_marker_name, NULL, DEFAULT_FEEDBACK_CB);
+      setCallback(req->child_marker_name, NULL, DEFAULT_FEEDBACK_CB);
     }
-    if ((req.parent_topic_name == std::string("") || topic_server_name_ == req.parent_topic_name) && ! (callback_map_.find(req.parent_marker_name)!=callback_map_.end()))
+    if ((req->parent_topic_name == std::string("") || topic_server_name_ == req->parent_topic_name) && ! (callback_map_.find(req->parent_marker_name)!=callback_map_.end()))
     {
-      setCallback(req.parent_marker_name, NULL, DEFAULT_FEEDBACK_CB);
+      setCallback(req->parent_marker_name, NULL, DEFAULT_FEEDBACK_CB);
     }
-    return true;
   }
-  bool ParentAndChildInteractiveMarkerServer::registerAssociationItself(std::string parent_marker_name, std::string parent_topic_name, std::string child_marker_name, geometry_msgs::PoseStamped child_pose_stamped)
+  bool ParentAndChildInteractiveMarkerServer::registerAssociationItself(std::string parent_marker_name, std::string parent_topic_name, std::string child_marker_name, geometry_msgs::msg::PoseStamped child_pose_stamped)
   {
-    geometry_msgs::PoseStamped parent_pose_stamped;
+    geometry_msgs::msg::PoseStamped parent_pose_stamped;
     getMarkerPose(parent_marker_name, parent_pose_stamped);
     return registerAssociation(parent_marker_name, parent_topic_name, child_marker_name, child_pose_stamped, parent_pose_stamped);
   }
-  bool ParentAndChildInteractiveMarkerServer::registerAssociationWithOtherNode(std::string parent_marker_name, std::string parent_topic_name, std::string child_marker_name, geometry_msgs::PoseStamped child_pose_stamped)
+  void ParentAndChildInteractiveMarkerServer::registerParentSubscribers(std::string parent_topic_name)
   {
-    geometry_msgs::PoseStamped parent_pose_stamped;
-    ros::ServiceClient client = n_.serviceClient<jsk_interactive_marker::GetTransformableMarkerPose>(parent_topic_name + "/get_marker_pose");
-    jsk_interactive_marker::GetTransformableMarkerPose srv;
-    srv.request.target_name = parent_marker_name;
-    if (!client.call(srv))
+    if (parent_subscriber_nums_.find(parent_topic_name) == parent_subscriber_nums_.end() || parent_subscriber_nums_[parent_topic_name] == 0 )
     {
-        return false;
+      // register subscriber
+      parent_subscriber_nums_[parent_topic_name] = 1;
+      parent_update_subscribers_[parent_topic_name] = node_->create_subscription<visualization_msgs::msg::InteractiveMarkerUpdate>(
+        parent_topic_name + "/update", 1,
+        [this, parent_topic_name](const visualization_msgs::msg::InteractiveMarkerUpdate::ConstSharedPtr update) {
+          parentUpdateCb(update, parent_topic_name);
+        });
+      parent_feedback_subscribers_[parent_topic_name] = node_->create_subscription<visualization_msgs::msg::InteractiveMarkerFeedback>(
+        parent_topic_name + "/feedback", 1,
+        [this, parent_topic_name](const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback) {
+          parentFeedbackCb(feedback, parent_topic_name);
+        });
     }
-    parent_pose_stamped = srv.response.pose_stamped;
-    return registerAssociation(parent_marker_name, parent_topic_name, child_marker_name, child_pose_stamped, parent_pose_stamped);
-  }
-  bool ParentAndChildInteractiveMarkerServer::registerAssociation(std::string parent_marker_name, std::string parent_topic_name, std::string child_marker_name, geometry_msgs::PoseStamped child_pose_stamped, geometry_msgs::PoseStamped parent_pose_stamped)
-  {
-    geometry_msgs::PoseStamped parent_pose_stamped_transed;
-    if (tf_listener_.waitForTransform(child_pose_stamped.header.frame_id,
-                                       parent_pose_stamped.header.frame_id, parent_pose_stamped.header.stamp, ros::Duration(1.0)))
+    else
     {
-      tf_listener_.transformPose(child_pose_stamped.header.frame_id, parent_pose_stamped, parent_pose_stamped_transed);
+      parent_subscriber_nums_[parent_topic_name] += 1;
+    }
+  }
+  void ParentAndChildInteractiveMarkerServer::registerAssociationWithOtherNode(std::string parent_marker_name, std::string parent_topic_name, std::string child_marker_name, geometry_msgs::msg::PoseStamped child_pose_stamped, bool register_parent_subscriber)
+  {
+    // NOTE: in ROS 1 this was a blocking service call inside a callback.
+    // In ROS 2 the request is sent asynchronously and the association is
+    // registered when the response arrives.
+    if (get_parent_pose_clients_.find(parent_topic_name) == get_parent_pose_clients_.end())
+    {
+      get_parent_pose_clients_[parent_topic_name] = node_->create_client<jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose>(parent_topic_name + "/get_marker_pose");
+    }
+    auto client = get_parent_pose_clients_[parent_topic_name];
+    auto request = std::make_shared<jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose::Request>();
+    request->target_name = parent_marker_name;
+    client->async_send_request(
+      request,
+      [this, parent_marker_name, parent_topic_name, child_marker_name, child_pose_stamped, register_parent_subscriber](
+        rclcpp::Client<jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose>::SharedFuture future) {
+        geometry_msgs::msg::PoseStamped parent_pose_stamped = future.get()->pose_stamped;
+        if (registerAssociation(parent_marker_name, parent_topic_name, child_marker_name, child_pose_stamped, parent_pose_stamped)
+            && register_parent_subscriber)
+        {
+          registerParentSubscribers(parent_topic_name);
+        }
+      });
+  }
+  bool ParentAndChildInteractiveMarkerServer::registerAssociation(std::string parent_marker_name, std::string parent_topic_name, std::string child_marker_name, geometry_msgs::msg::PoseStamped child_pose_stamped, geometry_msgs::msg::PoseStamped parent_pose_stamped)
+  {
+    geometry_msgs::msg::PoseStamped parent_pose_stamped_transed;
+    if (tf_buffer_->canTransform(child_pose_stamped.header.frame_id,
+                                 parent_pose_stamped.header.frame_id,
+                                 parent_pose_stamped.header.stamp,
+                                 rclcpp::Duration::from_seconds(1.0)))
+    {
+      tf_buffer_->transform(parent_pose_stamped, parent_pose_stamped_transed, child_pose_stamped.header.frame_id);
     }
     else
     {
       return false;
     }
     Eigen::Affine3d parent_pose_eigened, child_pose_eigened;
-    tf::poseMsgToEigen(parent_pose_stamped_transed.pose, parent_pose_eigened);
-    tf::poseMsgToEigen(child_pose_stamped.pose, child_pose_eigened);
+    tf2::fromMsg(parent_pose_stamped_transed.pose, parent_pose_eigened);
+    tf2::fromMsg(child_pose_stamped.pose, child_pose_eigened);
     association_list_[child_marker_name] = jsk_interactive_marker::ParentMarkerInformation(parent_topic_name, parent_marker_name, parent_pose_eigened.inverse() * child_pose_eigened);
     return true;
   }
 
-  bool ParentAndChildInteractiveMarkerServer::removeParentService(jsk_interactive_marker::RemoveParentMarker::Request &req, jsk_interactive_marker::RemoveParentMarker::Response &res)
+  void ParentAndChildInteractiveMarkerServer::removeParentService(const jsk_interactive_marker_msgs::srv::RemoveParentMarker::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::RemoveParentMarker::Response::SharedPtr res)
   {
-    return removeParent(req.child_marker_name);
+    (void)res;
+    removeParent(req->child_marker_name);
   }
   bool ParentAndChildInteractiveMarkerServer::removeParent(std::string child_marker_name)
   {
@@ -101,27 +129,25 @@ namespace jsk_interactive_marker
     parent_subscriber_nums_[parent_topic_name] -= 1;
     if (parent_subscriber_nums_[parent_topic_name] == 0)
     {
-      parent_feedback_subscribers_[parent_topic_name].shutdown();
-      parent_update_subscribers_[parent_topic_name].shutdown();
+      parent_feedback_subscribers_[parent_topic_name].reset();
+      parent_update_subscribers_[parent_topic_name].reset();
     }
     setCallback(child_marker_name, NULL, 200);
     association_list_.erase(child_marker_name);
     return true;
   }
 
-  bool ParentAndChildInteractiveMarkerServer::getMarkerPoseService(jsk_interactive_marker::GetTransformableMarkerPose::Request &req, jsk_interactive_marker::GetTransformableMarkerPose::Response &res)
+  void ParentAndChildInteractiveMarkerServer::getMarkerPoseService(const jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose::Request::SharedPtr req, jsk_interactive_marker_msgs::srv::GetTransformableMarkerPose::Response::SharedPtr res)
   {
-    geometry_msgs::PoseStamped pose_stamped;
-    if (getMarkerPose(req.target_name, pose_stamped))
+    geometry_msgs::msg::PoseStamped pose_stamped;
+    if (getMarkerPose(req->target_name, pose_stamped))
       {
-        res.pose_stamped = pose_stamped;
+        res->pose_stamped = pose_stamped;
       }
-    else
-      return false;
   }
-  bool ParentAndChildInteractiveMarkerServer::getMarkerPose(std::string target_name, geometry_msgs::PoseStamped &pose_stamped)
+  bool ParentAndChildInteractiveMarkerServer::getMarkerPose(std::string target_name, geometry_msgs::msg::PoseStamped &pose_stamped)
   {
-    visualization_msgs::InteractiveMarker focus_marker;
+    visualization_msgs::msg::InteractiveMarker focus_marker;
     if (get(target_name, focus_marker))
       {
         pose_stamped.pose = focus_marker.pose;
@@ -130,7 +156,7 @@ namespace jsk_interactive_marker
       }
     return false;
   }
-  void ParentAndChildInteractiveMarkerServer::parentUpdateCb(const visualization_msgs::InteractiveMarkerUpdateConstPtr &update, std::string parent_topic_name)
+  void ParentAndChildInteractiveMarkerServer::parentUpdateCb(const visualization_msgs::msg::InteractiveMarkerUpdate::ConstSharedPtr update, std::string parent_topic_name)
   {
     // keep relative pose
     bool need_apply_change = false;
@@ -148,7 +174,7 @@ namespace jsk_interactive_marker
     if (need_apply_change)
       interactive_markers::InteractiveMarkerServer::applyChanges();
   }
-  void ParentAndChildInteractiveMarkerServer::parentFeedbackCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback, std::string parent_topic_name)
+  void ParentAndChildInteractiveMarkerServer::parentFeedbackCb(const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback, std::string parent_topic_name)
   {
     // keep relative pose
     bool need_apply_change = false;
@@ -165,16 +191,15 @@ namespace jsk_interactive_marker
       interactive_markers::InteractiveMarkerServer::applyChanges();
     // apply change
   }
-  void ParentAndChildInteractiveMarkerServer::renewPoseWithParent(std::map <std::string, ParentMarkerInformation>::iterator assoc_it, geometry_msgs::Pose parent_pose, std_msgs::Header parent_header)
+  void ParentAndChildInteractiveMarkerServer::renewPoseWithParent(std::map <std::string, ParentMarkerInformation>::iterator assoc_it, geometry_msgs::msg::Pose parent_pose, std_msgs::msg::Header parent_header)
   {
     Eigen::Affine3d parent_pose_eigened, child_new_pose_eigened;
-    tf::poseMsgToEigen(parent_pose, parent_pose_eigened);
+    tf2::fromMsg(parent_pose, parent_pose_eigened);
     child_new_pose_eigened = parent_pose_eigened * assoc_it -> second.relative_pose;
-    geometry_msgs::Pose child_new_pose;
-    tf::poseEigenToMsg(child_new_pose_eigened, child_new_pose);
+    geometry_msgs::msg::Pose child_new_pose = tf2::toMsg(child_new_pose_eigened);
     setPose(assoc_it -> first, child_new_pose, parent_header);
   }
-  void ParentAndChildInteractiveMarkerServer::selfFeedbackCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback) // for updating relative pose with feedback
+  void ParentAndChildInteractiveMarkerServer::selfFeedbackCb(visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback) // for updating relative pose with feedback
   {
     // keep relative pose
     bool need_apply_change = false;
@@ -194,12 +219,12 @@ namespace jsk_interactive_marker
     // check self parent
     // renew all
     // only when mouse is removed because it takes much cost for service call
-    if (feedback -> event_type != visualization_msgs::InteractiveMarkerFeedback::MOUSE_UP)
+    if (feedback -> event_type != visualization_msgs::msg::InteractiveMarkerFeedback::MOUSE_UP)
     {
       return;
     }
     // only changes feedback marker -> parent
-    geometry_msgs::PoseStamped feedback_pose_stamped;
+    geometry_msgs::msg::PoseStamped feedback_pose_stamped;
     feedback_pose_stamped.pose = feedback->pose;
     feedback_pose_stamped.header = feedback->header;
     assoc_it = association_list_.begin();
@@ -224,7 +249,7 @@ namespace jsk_interactive_marker
     while (assoc_it != association_list_.end()){
       if(assoc_it->second.parent_topic_name == topic_server_name_)
       {
-        visualization_msgs::InteractiveMarker int_marker;
+        visualization_msgs::msg::InteractiveMarker int_marker;
         get(assoc_it->second.parent_marker_name, int_marker);
         renewPoseWithParent(assoc_it, int_marker.pose, int_marker.header);
       }
@@ -238,8 +263,8 @@ namespace jsk_interactive_marker
     while (assoc_it != association_list_.end()){
       if (topic_server_name_ == assoc_it->second.parent_topic_name)
       {
-        geometry_msgs::PoseStamped feedback_pose_stamped;
-        visualization_msgs::InteractiveMarker int_marker;
+        geometry_msgs::msg::PoseStamped feedback_pose_stamped;
+        visualization_msgs::msg::InteractiveMarker int_marker;
         get(assoc_it->first, int_marker);
         feedback_pose_stamped.pose = int_marker.pose; feedback_pose_stamped.header = int_marker.header;
         registerAssociationItself(assoc_it->second.parent_marker_name, assoc_it->second.parent_topic_name, assoc_it->first, feedback_pose_stamped);
@@ -250,16 +275,17 @@ namespace jsk_interactive_marker
   bool ParentAndChildInteractiveMarkerServer::setCallback(const std::string &name, FeedbackCallback feedback_cb, uint8_t feedback_type)
   {
     // synthesize cbs
-    callback_map_[name] = std::make_shared<FeedbackSynthesizer> (boost::bind(&ParentAndChildInteractiveMarkerServer::selfFeedbackCb, this, _1), feedback_cb);
-    return interactive_markers::InteractiveMarkerServer::setCallback(name, boost::bind(&FeedbackSynthesizer::call_func, *callback_map_[name], _1), feedback_type);
+    std::shared_ptr<FeedbackSynthesizer> synthesizer = std::make_shared<FeedbackSynthesizer> (std::bind(&ParentAndChildInteractiveMarkerServer::selfFeedbackCb, this, std::placeholders::_1), feedback_cb);
+    callback_map_[name] = synthesizer;
+    return interactive_markers::InteractiveMarkerServer::setCallback(name, std::bind(&FeedbackSynthesizer::call_func, synthesizer, std::placeholders::_1), feedback_type);
   }
-  void ParentAndChildInteractiveMarkerServer::insert(const visualization_msgs::InteractiveMarker &int_marker)
+  void ParentAndChildInteractiveMarkerServer::insert(const visualization_msgs::msg::InteractiveMarker &int_marker)
   {
     callback_map_.erase(int_marker.name);
     removeParent(int_marker.name);
     interactive_markers::InteractiveMarkerServer::insert(int_marker);
   }
-  void ParentAndChildInteractiveMarkerServer::insert(const visualization_msgs::InteractiveMarker &int_marker, FeedbackCallback feedback_cb, uint8_t feedback_type)
+  void ParentAndChildInteractiveMarkerServer::insert(const visualization_msgs::msg::InteractiveMarker &int_marker, FeedbackCallback feedback_cb, uint8_t feedback_type)
   {
     insert(int_marker);
     // synthesize cbs
