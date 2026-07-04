@@ -2,27 +2,25 @@
 #define __AMBIENT_SOUND_DISPLAY__
 
 #ifndef Q_MOC_RUN  // See: https://bugreports.qt-project.org/browse/QTBUG-22829
-#include <message_filters/subscriber.h>
-#include <tf/message_filter.h>
-#include <jsk_hark_msgs/HarkPower.h>
-#include <ambient_sound_visual.h>
+#include <jsk_hark_msgs/msg/hark_power.hpp>
+#include "ambient_sound_visual.h"
 #include <boost/circular_buffer.hpp>
-#include <rviz/message_filter_display.h>
+#include <rviz_common/message_filter_display.hpp>
 #endif
-
-#include <ros/ros.h>
 
 namespace Ogre
 {
 class SceneNode;
 }
 
-namespace rviz
+namespace rviz_common
+{
+namespace properties
 {
     class ColorProperty;
     class FloatProperty;
     class IntProperty;
-    class ROSTopicStringProperty;
+}
 }
 
 // All the source in this plugin is in its own namespace.  This is not
@@ -32,8 +30,8 @@ namespace jsk_rviz_plugins
 
 class AmbientSoundVisual;
 
-//class AmbientSoundDisplay: public rviz::Display
-class AmbientSoundDisplay: public rviz::MessageFilterDisplay<jsk_hark_msgs::HarkPower>
+//class AmbientSoundDisplay: public rviz_common::Display
+class AmbientSoundDisplay: public rviz_common::MessageFilterDisplay<jsk_hark_msgs::msg::HarkPower>
 {
 Q_OBJECT
 public:
@@ -90,12 +88,12 @@ private Q_SLOTS:
   void updateColorAndAlpha();
   void updateAppearance();
   void updateHistoryLength();
-  bool validateFloats( const jsk_hark_msgs::HarkPower& );
+  bool validateFloats( const jsk_hark_msgs::msg::HarkPower& );
 
   // Function to handle an incoming ROS message.
 private:
-  //void incomingMessage( const jsk_hark_msgs::HarkPower::ConstPtr& msg );
-  void processMessage( const jsk_hark_msgs::HarkPower::ConstPtr& msg );
+  //void incomingMessage( jsk_hark_msgs::msg::HarkPower::ConstSharedPtr msg );
+  void processMessage( jsk_hark_msgs::msg::HarkPower::ConstSharedPtr msg );
 
   // Internal helpers which do the work of subscribing and
   // unsubscribing from the ROS topic.
@@ -111,11 +109,7 @@ private:
   // adjustable history length, so we need one visual per history
   // item.
   //boost::circular_buffer<AmbientSoundVisual*> visuals_;
-#if ROS_VERSION_MINIMUM(1,12,0)
   boost::circular_buffer<std::shared_ptr<AmbientSoundVisual> > visuals_;
-#else
-  boost::circular_buffer<boost::shared_ptr<AmbientSoundVisual> > visuals_;
-#endif
 
   // A node in the Ogre scene tree to be the parent of all our visuals.
   //Ogre::SceneNode* scene_node_;
@@ -135,14 +129,13 @@ private:
 */
 
   // Property objects for user-editable properties.
-  rviz::ColorProperty *color_property_;
-  rviz::ROSTopicStringProperty *topic_property_;
-  rviz::FloatProperty *alpha_property_;
-  rviz::IntProperty *history_length_property_;
-  rviz::FloatProperty *width_property_;
-  rviz::FloatProperty *scale_property_;
-  rviz::FloatProperty *bias_property_;
-  rviz::FloatProperty *grad_property_;
+  rviz_common::properties::ColorProperty *color_property_;
+  rviz_common::properties::FloatProperty *alpha_property_;
+  rviz_common::properties::IntProperty *history_length_property_;
+  rviz_common::properties::FloatProperty *width_property_;
+  rviz_common::properties::FloatProperty *scale_property_;
+  rviz_common::properties::FloatProperty *bias_property_;
+  rviz_common::properties::FloatProperty *grad_property_;
 };
 // END_TUTORIAL
 

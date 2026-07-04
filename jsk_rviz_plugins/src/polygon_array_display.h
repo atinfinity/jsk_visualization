@@ -37,81 +37,75 @@
 #define POLYGON_ARRAY_DISPLAY_H
 
 #ifndef Q_MOC_RUN
-#include <jsk_recognition_msgs/PolygonArray.h>
-#include <rviz/message_filter_display.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/ogre_helpers/billboard_line.h>
-#include <rviz/ogre_helpers/shape.h>
+#include <jsk_recognition_msgs/msg/polygon_array.hpp>
+#include <rviz_common/message_filter_display.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_rendering/objects/billboard_line.hpp>
+#include <rviz_rendering/objects/shape.hpp>
 
-#include <OGRE/OgreSceneManager.h>
-#include <OGRE/OgreSceneNode.h>
-#include <OGRE/OgreManualObject.h>
-#include <OGRE/OgreMaterialManager.h>
-#include <OGRE/OgreTechnique.h>
-#include <rviz/properties/color_property.h>
-#include <rviz/properties/bool_property.h>
-#include <rviz/properties/enum_property.h>
-#include <rviz/ogre_helpers/billboard_line.h>
-#include <rviz/ogre_helpers/arrow.h>
+#include <OgreSceneManager.h>
+#include <OgreSceneNode.h>
+#include <OgreManualObject.h>
+#include <OgreMaterialManager.h>
+#include <OgreTechnique.h>
+#include <rviz_common/properties/color_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/enum_property.hpp>
+#include <rviz_rendering/objects/arrow.hpp>
+#include <memory>
 #endif
-
-#include <ros/ros.h>
 
 namespace jsk_rviz_plugins
 {
-  
+
   class PolygonArrayDisplay:
-    public rviz::MessageFilterDisplay<jsk_recognition_msgs::PolygonArray>
+    public rviz_common::MessageFilterDisplay<jsk_recognition_msgs::msg::PolygonArray>
   {
     Q_OBJECT
   public:
-#if ROS_VERSION_MINIMUM(1,12,0)
-    typedef std::shared_ptr<rviz::Arrow> ArrowPtr;
-#else
-    typedef boost::shared_ptr<rviz::Arrow> ArrowPtr;
-#endif
+    typedef std::shared_ptr<rviz_rendering::Arrow> ArrowPtr;
     PolygonArrayDisplay();
     virtual ~PolygonArrayDisplay();
   protected:
-    virtual void onInitialize();
-    virtual void reset();
+    void onInitialize() override;
+    void reset() override;
     virtual void updateSceneNodes(
-      const jsk_recognition_msgs::PolygonArray::ConstPtr& msg);
-    virtual void allocateMaterials(int num);
-    virtual void updateLines(int num);
+      const jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr& msg);
+    virtual void allocateMaterials(size_t num);
+    virtual void updateLines(size_t num);
     virtual Ogre::ColourValue getColor(size_t index);
     virtual void processLine(
-      const size_t i, const geometry_msgs::PolygonStamped& polygon);
+      const size_t i, const geometry_msgs::msg::PolygonStamped& polygon);
     virtual void processPolygon(
-      const size_t i, const geometry_msgs::PolygonStamped& polygon);
+      const size_t i, const geometry_msgs::msg::PolygonStamped& polygon);
     virtual void processNormal(
-      const size_t i, const geometry_msgs::PolygonStamped& polygon);
+      const size_t i, const geometry_msgs::msg::PolygonStamped& polygon);
     virtual void processPolygonMaterial(const size_t i);
-    virtual void processMessage(
-      const jsk_recognition_msgs::PolygonArray::ConstPtr& msg);
+    void processMessage(
+      jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr msg) override;
     virtual bool getTransform(
-      const std_msgs::Header &header,
+      const std_msgs::msg::Header &header,
       Ogre::Vector3& position, Ogre::Quaternion& orientation);
-    rviz::ColorProperty* color_property_;
-    rviz::FloatProperty* alpha_property_;
-    rviz::BoolProperty* only_border_property_;
-    // rviz::BoolProperty* auto_coloring_property_;
-    rviz::EnumProperty* coloring_property_;
-    rviz::BoolProperty* show_normal_property_;
-    rviz::BoolProperty* enable_lighting_property_;
-    rviz::FloatProperty* normal_length_property_;
+    rviz_common::properties::ColorProperty* color_property_;
+    rviz_common::properties::FloatProperty* alpha_property_;
+    rviz_common::properties::BoolProperty* only_border_property_;
+    // rviz_common::properties::BoolProperty* auto_coloring_property_;
+    rviz_common::properties::EnumProperty* coloring_property_;
+    rviz_common::properties::BoolProperty* show_normal_property_;
+    rviz_common::properties::BoolProperty* enable_lighting_property_;
+    rviz_common::properties::FloatProperty* normal_length_property_;
     bool only_border_;
     bool enable_lighting_;
     std::string coloring_method_;
     bool show_normal_;
     double normal_length_;
-    jsk_recognition_msgs::PolygonArray::ConstPtr latest_msg_;
+    jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr latest_msg_;
     std::vector<Ogre::ManualObject*> manual_objects_;
     std::vector<Ogre::SceneNode*> scene_nodes_;
     std::vector<Ogre::SceneNode*> arrow_nodes_;
     std::vector<ArrowPtr> arrow_objects_;
     std::vector<Ogre::MaterialPtr> materials_;
-    std::vector<rviz::BillboardLine*> lines_;
+    std::vector<rviz_rendering::BillboardLine*> lines_;
   private Q_SLOTS:
     void updateColoring();
     void updateOnlyBorder();

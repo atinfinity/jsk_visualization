@@ -1,8 +1,8 @@
-// -*- mode: c++; -*-
+// -*- mode: c++ -*-
 /*********************************************************************
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2014, JSK Lab
+ *  Copyright (c) 2015, JSK Lab
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -33,49 +33,69 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#ifndef JSK_RVIZ_PLUGINS_SIMPLE_OCCUPANCY_GRID_ARRAY_DISPLAY_H_
-#define JSK_RVIZ_PLUGINS_SIMPLE_OCCUPANCY_GRID_ARRAY_DISPLAY_H_
+// Vendored, PCL-free subset of jsk_recognition_utils::Plane
+// (https://github.com/jsk-ros-pkg/jsk_recognition) carrying only the API
+// used by jsk_rviz_plugins. Remove once jsk_recognition_utils is released
+// for ROS 2.
 
-#ifndef Q_MOC_RUN
-#include <jsk_recognition_msgs/msg/simple_occupancy_grid_array.hpp>
-#include <rviz_common/message_filter_display.hpp>
-#include <rviz_common/properties/float_property.hpp>
-#include <rviz_common/properties/bool_property.hpp>
-#include <rviz_rendering/objects/shape.hpp>
-#include <rviz_common/properties/color_property.hpp>
-#include <rviz_rendering/objects/point_cloud.hpp>
+#ifndef JSK_RECOGNITION_UTILS_GEO_PLANE_H_
+#define JSK_RECOGNITION_UTILS_GEO_PLANE_H_
+
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+
 #include <memory>
-#endif
+#include <vector>
 
-namespace jsk_rviz_plugins
+namespace jsk_recognition_utils
 {
-  class SimpleOccupancyGridArrayDisplay:
-    public rviz_common::MessageFilterDisplay<
-    jsk_recognition_msgs::msg::SimpleOccupancyGridArray>
+  class Plane
   {
-    Q_OBJECT
   public:
-    typedef std::shared_ptr<rviz_rendering::PointCloud> PointCloudPtr;
-    SimpleOccupancyGridArrayDisplay();
-    virtual ~SimpleOccupancyGridArrayDisplay();
-  protected:
-    void onInitialize() override;
-    void reset() override;
-    virtual void allocateCloudsAndNodes(const size_t num);
-    rviz_common::properties::FloatProperty* alpha_property_;
-    rviz_common::properties::BoolProperty* auto_color_property_;
-    double alpha_;
-    std::vector<rviz_rendering::PointCloud*> clouds_;
-    std::vector<Ogre::SceneNode*> nodes_;
-    bool auto_color_;
-  private:
-    void processMessage(
-      jsk_recognition_msgs::msg::SimpleOccupancyGridArray::ConstSharedPtr msg) override;
-  private Q_SLOTS:
-    void updateAlpha();
-    void updateAutoColor();
-  };
+    typedef std::shared_ptr<Plane> Ptr;
+    Plane(const std::vector<float>& coefficients)
+    {
+      normal_ = Eigen::Vector3f(coefficients[0], coefficients[1], coefficients[2]);
+      d_ = coefficients[3] / normal_.norm();
+      normal_.normalize();
+      initializeCoordinates();
+    }
 
+    Plane(const Eigen::Vector3f& normal, const Eigen::Vector3f& p)
+      : normal_(normal.normalized()), d_(- normal.dot(p) / normal.norm())
+    {
+      initializeCoordinates();
+    }
+
+    virtual ~Plane() {}
+
+    virtual Eigen::Vector3f getNormal() { return normal_; }
+    virtual double getD() { return d_; }
+    virtual Eigen::Affine3f coordinates() { return plane_coordinates_; }
+
+  protected:
+    void initializeCoordinates()
+    {
+      Eigen::Quaternionf rot;
+      rot.setFromTwoVectors(Eigen::Vector3f::UnitZ(), normal_);
+      double c = normal_[2];
+      double z = 0.0;
+      // ax + by + cz + d = 0
+      // z = - d / c (when x = y = 0)
+      if (c == 0.0) {             // its not good
+        z = 0.0;
+      }
+      else {
+        z = - d_ / c;
+      }
+      plane_coordinates_
+        = Eigen::Affine3f::Identity() * Eigen::Translation3f(0, 0, z) * rot;
+    }
+
+    Eigen::Vector3f normal_;
+    double d_;
+    Eigen::Affine3f plane_coordinates_;
+  };
 }
 
 #endif

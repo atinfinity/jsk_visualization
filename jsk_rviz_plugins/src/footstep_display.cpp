@@ -34,34 +34,37 @@
  *********************************************************************/
 
 #include "footstep_display.h"
-#include <rviz/validate_floats.h>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/validate_floats.hpp>
 #include <jsk_topic_tools/color_utils.h>
 
 namespace jsk_rviz_plugins
 {
-  FootstepDisplay::FootstepDisplay()
+  FootstepDisplay::FootstepDisplay(): line_(NULL)
   {
-    alpha_property_ =  new rviz::FloatProperty( "Alpha", 0.5,
+    alpha_property_ =  new rviz_common::properties::FloatProperty( "Alpha", 0.5,
                                                 "0 is fully transparent, 1.0 is fully opaque.",
                                                 this, SLOT( updateAlpha() ));
-    show_name_property_ = new rviz::BoolProperty(
+    show_name_property_ = new rviz_common::properties::BoolProperty(
       "Show Name", true,
       "Show name of each footstep",
       this, SLOT(updateShowName()));
-    use_group_coloring_property_ = new rviz::BoolProperty(
+    use_group_coloring_property_ = new rviz_common::properties::BoolProperty(
       "Use Group Coloring", false,
       "Use footstep_group field to colorize footsteps",
       this, SLOT(updateUseGroupColoring()));
-    width_property_ =  new rviz::FloatProperty(
+    width_property_ =  new rviz_common::properties::FloatProperty(
       "Width", 0.15,
       "width of the footstep, it's not used if the dimensions is specified in Footstep message.",
       this, SLOT( updateWidth() ));
-    height_property_ =  new rviz::FloatProperty(
+    height_property_ =  new rviz_common::properties::FloatProperty(
       "height", 0.01,
       "height of the footstep, it's not used if the dimensions is specified in Footstep message.",
       this, SLOT( updateHeight() ));
 
-    depth_property_ =  new rviz::FloatProperty(
+    depth_property_ =  new rviz_common::properties::FloatProperty(
       "depth", 0.3,
       "depth of the footstep, it's not used if the dimensions is specified in Footstep message.",
       this, SLOT( updateDepth() ));
@@ -75,13 +78,17 @@ namespace jsk_rviz_plugins
     delete depth_property_;
     delete show_name_property_;
     delete use_group_coloring_property_;
-    delete line_;
+    if (line_) {
+      delete line_;
+    }
     // remove all the nodes
-    for (size_t i = 0; i < text_nodes_.size(); i++) {
-      Ogre::SceneNode* node = text_nodes_[i];
-      node->removeAndDestroyAllChildren();
-      node->detachAllObjects();
-      scene_manager_->destroySceneNode(node);
+    if (initialized()) {
+      for (size_t i = 0; i < text_nodes_.size(); i++) {
+        Ogre::SceneNode* node = text_nodes_[i];
+        node->removeAndDestroyAllChildren();
+        node->detachAllObjects();
+        scene_manager_->destroySceneNode(node);
+      }
     }
   }
 
@@ -120,22 +127,24 @@ namespace jsk_rviz_plugins
   {
     MFDClass::reset();
     shapes_.clear();
-    line_->clear();
+    if (line_) {
+      line_->clear();
+    }
     allocateTexts(0);
   }
 
-  bool FootstepDisplay::validateFloats( const jsk_footstep_msgs::FootstepArray& msg )
+  bool FootstepDisplay::validateFloats( const jsk_footstep_msgs::msg::FootstepArray& msg )
   {
-    for (std::vector<jsk_footstep_msgs::Footstep>::const_iterator it = msg.footsteps.begin();
+    for (std::vector<jsk_footstep_msgs::msg::Footstep>::const_iterator it = msg.footsteps.begin();
          it != msg.footsteps.end();
          ++it) {
-      if (!rviz::validateFloats((*it).pose.position.x)
-          || !rviz::validateFloats((*it).pose.position.y)
-          || !rviz::validateFloats((*it).pose.position.z)
-          || !rviz::validateFloats((*it).pose.orientation.x)
-          || !rviz::validateFloats((*it).pose.orientation.y)
-          || !rviz::validateFloats((*it).pose.orientation.z)
-          || !rviz::validateFloats((*it).pose.orientation.w)
+      if (!rviz_common::validateFloats((*it).pose.position.x)
+          || !rviz_common::validateFloats((*it).pose.position.y)
+          || !rviz_common::validateFloats((*it).pose.position.z)
+          || !rviz_common::validateFloats((*it).pose.orientation.x)
+          || !rviz_common::validateFloats((*it).pose.orientation.y)
+          || !rviz_common::validateFloats((*it).pose.orientation.z)
+          || !rviz_common::validateFloats((*it).pose.orientation.w)
         ) {
         return false;
       }
@@ -146,8 +155,7 @@ namespace jsk_rviz_plugins
   void FootstepDisplay::onInitialize()
   {
     MFDClass::onInitialize();
-    scene_node_ = scene_manager_->getRootSceneNode()->createChildSceneNode();
-    line_ = new rviz::BillboardLine(context_->getSceneManager(), scene_node_);
+    line_ = new rviz_rendering::BillboardLine(context_->getSceneManager(), scene_node_);
     updateShowName();
     updateWidth();
     updateHeight();
@@ -161,8 +169,9 @@ namespace jsk_rviz_plugins
       // need to allocate
       for (size_t i = shapes_.size(); i < num; i++) {
         ShapePtr shape;
-        shape.reset(new rviz::Shape(rviz::Shape::Cube, context_->getSceneManager(),
-                                    scene_node_));
+        shape.reset(new rviz_rendering::Shape(rviz_rendering::Shape::Cube,
+                                              context_->getSceneManager(),
+                                              scene_node_));
         shapes_.push_back(shape);
       }
     }
@@ -178,11 +187,11 @@ namespace jsk_rviz_plugins
       for (size_t i = texts_.size(); i < num; i++) {
         // create nodes
         Ogre::SceneNode* node = scene_node_->createChildSceneNode();
-        rviz::MovableText* text 
-          = new rviz::MovableText("not initialized", "Liberation Sans", 0.05);
+        rviz_rendering::MovableText* text
+          = new rviz_rendering::MovableText("not initialized", "Liberation Sans", 0.05);
         text->setVisible(false);
-        text->setTextAlignment(rviz::MovableText::H_CENTER,
-                               rviz::MovableText::V_ABOVE);
+        text->setTextAlignment(rviz_rendering::MovableText::H_CENTER,
+                               rviz_rendering::MovableText::V_ABOVE);
         node->attachObject(text);
         texts_.push_back(text);
         text_nodes_.push_back(node);
@@ -218,24 +227,24 @@ namespace jsk_rviz_plugins
     for (size_t i = 0; i < shapes_.size(); i++) {
       ShapePtr shape = shapes_[i];
       texts_[i]->setVisible(show_name_); // TODO
-      jsk_footstep_msgs::Footstep footstep = latest_footstep_->footsteps[i];
+      jsk_footstep_msgs::msg::Footstep footstep = latest_footstep_->footsteps[i];
             // color
       if (use_group_coloring_) {
-        std_msgs::ColorRGBA color
+        std_msgs::msg::ColorRGBA color
           = jsk_topic_tools::colorCategory20(footstep.footstep_group);
         shape->setColor(color.r, color.g, color.b, alpha_);
       }
       else {
-        if (footstep.leg == jsk_footstep_msgs::Footstep::LLEG) {
+        if (footstep.leg == jsk_footstep_msgs::msg::Footstep::LLEG) {
           shape->setColor(0, 1, 0, alpha_);
         }
-        else if (footstep.leg == jsk_footstep_msgs::Footstep::RLEG) {
+        else if (footstep.leg == jsk_footstep_msgs::msg::Footstep::RLEG) {
           shape->setColor(1, 0, 0, alpha_);
         }
-        else if (footstep.leg == jsk_footstep_msgs::Footstep::LARM) {
+        else if (footstep.leg == jsk_footstep_msgs::msg::Footstep::LARM) {
           shape->setColor(0, 1, 1, alpha_);
         }
-        else if (footstep.leg == jsk_footstep_msgs::Footstep::RARM) {
+        else if (footstep.leg == jsk_footstep_msgs::msg::Footstep::RARM) {
           shape->setColor(1, 0, 1, alpha_);
         }
         else {
@@ -247,7 +256,7 @@ namespace jsk_rviz_plugins
   }
   
   double FootstepDisplay::estimateTextSize(
-    const jsk_footstep_msgs::Footstep& footstep)
+    const jsk_footstep_msgs::msg::Footstep& footstep)
   {
     if (footstep.dimensions.x == 0 &&
         footstep.dimensions.y == 0 &&
@@ -267,24 +276,23 @@ namespace jsk_rviz_plugins
   }
   
   
-  void FootstepDisplay::processMessage(const jsk_footstep_msgs::FootstepArray::ConstPtr& msg)
+  void FootstepDisplay::processMessage(jsk_footstep_msgs::msg::FootstepArray::ConstSharedPtr msg)
   {
     if (!validateFloats(*msg)) {
-      setStatus(rviz::StatusProperty::Error, "Topic", "message contained invalid floating point values (nans or infs)");
+      setStatus(rviz_common::properties::StatusProperty::Error, "Topic", "message contained invalid floating point values (nans or infs)");
       return;
     }
     latest_footstep_ = msg;
     Ogre::Quaternion orientation;
     Ogre::Vector3 position;
-    if(!context_->getFrameManager()->getTransform( msg->header.frame_id,
-                                                    msg->header.stamp,
+    if(!context_->getFrameManager()->getTransform( msg->header,
                                                    position, orientation)) {
       std::ostringstream oss;
       oss << "Error transforming pose";
       oss << " from frame '" << msg->header.frame_id << "'";
       oss << " to frame '" << qPrintable(fixed_frame_) << "'";
-      ROS_ERROR_STREAM(oss.str());
-      setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+      RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+      setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
       return;
     }
 
@@ -299,9 +307,9 @@ namespace jsk_rviz_plugins
     for (size_t i = 0; i < msg->footsteps.size(); i++)
     {
       ShapePtr shape = shapes_[i];
-      rviz::MovableText* text = texts_[i];
+      rviz_rendering::MovableText* text = texts_[i];
       Ogre::SceneNode* node = text_nodes_[i];
-      jsk_footstep_msgs::Footstep footstep = msg->footsteps[i];
+      jsk_footstep_msgs::msg::Footstep footstep = msg->footsteps[i];
       Ogre::Vector3 step_position;
       Ogre::Vector3 shape_position;
       Ogre::Quaternion step_quaternion;
@@ -313,8 +321,8 @@ namespace jsk_rviz_plugins
         oss << "Error transforming pose";
         oss << " from frame '" << msg->header.frame_id << "'";
         oss << " to frame '" << qPrintable(fixed_frame_) << "'";
-        ROS_ERROR_STREAM(oss.str());
-        setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+        RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+        setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
         return;
       }
       // add offset
@@ -339,16 +347,16 @@ namespace jsk_rviz_plugins
       }
       shape->setScale(scale);      
       // update the size of text
-      if (footstep.leg == jsk_footstep_msgs::Footstep::LLEG) {
+      if (footstep.leg == jsk_footstep_msgs::msg::Footstep::LLEG) {
         text->setCaption("LLEG");
       }
-      else if (footstep.leg == jsk_footstep_msgs::Footstep::RLEG) {
+      else if (footstep.leg == jsk_footstep_msgs::msg::Footstep::RLEG) {
         text->setCaption("RLEG");
       }
-      else if (footstep.leg == jsk_footstep_msgs::Footstep::LARM) {
+      else if (footstep.leg == jsk_footstep_msgs::msg::Footstep::LARM) {
         text->setCaption("LARM");
       }
-      else if (footstep.leg == jsk_footstep_msgs::Footstep::RARM) {
+      else if (footstep.leg == jsk_footstep_msgs::msg::Footstep::RARM) {
         text->setCaption("RARM");
       }
       else {
@@ -368,5 +376,5 @@ namespace jsk_rviz_plugins
 
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::FootstepDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::FootstepDisplay, rviz_common::Display )

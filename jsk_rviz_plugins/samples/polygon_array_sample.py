@@ -1,6 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import rospy
+import time
+
+import rclpy
 from jsk_recognition_msgs.msg import PolygonArray
 from geometry_msgs.msg import Polygon, PolygonStamped, Point32
 from std_msgs.msg import Header
@@ -14,7 +16,7 @@ def SquarePolygon(header):
                         Point32(x=-1.0, y=-1.0),
                         Point32(x=1.0, y=-1.0)]
     return p
-    
+
 def RectanglePolygon(header):
     p = PolygonStamped()
     p.header = header
@@ -32,7 +34,7 @@ def CirclePolygon(header):
         y = 1.0 * sin(theta)
         p.polygon.points.append(Point32(x=x, y=y))
     return p
-    
+
     # star
 def StarPolygon(header):
     p = PolygonStamped()
@@ -48,16 +50,16 @@ def StarPolygon(header):
                         Point32(x= -.9511, y= .3090 + 3.0),
                         Point32(x= -.2245, y= .3090 + 3.0)]
     return p
-    
+
 if __name__ == "__main__":
-    rospy.init_node("polygon_array_sample")
-    pub = rospy.Publisher("~output", PolygonArray)
-    r = rospy.Rate(10)
-    while not rospy.is_shutdown():
+    rclpy.init()
+    node = rclpy.create_node("polygon_array_sample")
+    pub = node.create_publisher(PolygonArray, "~/output", 1)
+    while rclpy.ok():
         msg = PolygonArray()
         header = Header()
         header.frame_id = "world"
-        header.stamp = rospy.Time.now()
+        header.stamp = node.get_clock().now().to_msg()
         msg.header = header
         msg.polygons = [SquarePolygon(header),
                         RectanglePolygon(header),
@@ -66,3 +68,4 @@ if __name__ == "__main__":
         msg.labels = [0, 1, 2, 3]
         msg.likelihood = [np.random.ranf(), np.random.ranf(), np.random.ranf(), np.random.ranf()]
         pub.publish(msg)
+        time.sleep(1.0 / 10)

@@ -16,6 +16,9 @@ find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(jsk_rviz_plugins_msgs REQUIRED)
+find_package(jsk_recognition_msgs REQUIRED)
+find_package(jsk_footstep_msgs REQUIRED)
+find_package(jsk_hark_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -76,6 +79,18 @@ set(SOURCE_FILES
   src/rviz_scene_publisher.cpp
   src/video_capture_display.cpp
   src/quiet_interactive_marker_display.cpp
+  # Phase 2: displays depending on formerly ROS 1-only message packages
+  src/color_utils.cpp
+  src/footstep_display.cpp
+  src/ambient_sound_display_groovy.cpp
+  src/ambient_sound_visual.cpp
+  src/bounding_box_display.cpp
+  src/bounding_box_array_display.cpp
+  src/torus_array_display.cpp
+  src/segment_array_display.cpp
+  src/human_skeleton_array_display.cpp
+  src/simple_occupancy_grid_array_display.cpp
+  src/polygon_array_display.cpp
 )
 
 # Deferred: forks the ROS 1 rviz camera display internals, which were fully
@@ -106,6 +121,9 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   image_geometry::image_geometry
   message_filters::message_filters
   ${jsk_rviz_plugins_msgs_TARGETS}
+  ${jsk_recognition_msgs_TARGETS}
+  ${jsk_footstep_msgs_TARGETS}
+  ${jsk_hark_msgs_TARGETS}
   ${std_msgs_TARGETS}
   ${std_srvs_TARGETS}
   ${geometry_msgs_TARGETS}
@@ -144,12 +162,19 @@ install(PROGRAMS
   scripts/string_to_overlay_text.py
   scripts/tf_diff_text.py
   scripts/twist_stamped_add_header.py
+  scripts/classification_result_visualizer.py
+  samples/bounding_box_sample.py
   samples/diagnostics_sample.py
+  samples/footstep_sample.py
   samples/overlay_menu_sample.py
   samples/overlay_sample.py
   samples/pictogram.py
   samples/pictogram_all.py
   samples/piechart_sample.py
+  samples/polygon_array_sample.py
+  samples/segment_array_sample.py
+  samples/sparse_occupancy_grid_sample.py
+  samples/torus_array_sample.py
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
@@ -168,7 +193,8 @@ endif()
 ament_export_libraries(${PROJECT_NAME})
 ament_export_dependencies(
   rclcpp rviz_common rviz_rendering rviz_default_plugins rviz_ogre_vendor
-  jsk_rviz_plugins_msgs std_msgs std_srvs geometry_msgs sensor_msgs
+  jsk_rviz_plugins_msgs jsk_recognition_msgs jsk_footstep_msgs jsk_hark_msgs
+  std_msgs std_srvs geometry_msgs sensor_msgs
   diagnostic_msgs action_msgs cv_bridge image_geometry image_transport
   interactive_markers message_filters tf2_ros)
 ament_package()

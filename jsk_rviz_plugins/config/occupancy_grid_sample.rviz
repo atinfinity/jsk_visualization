@@ -22,15 +22,15 @@ Visualization Manager:
       Enabled: true
       Name: Grid
       Value: true
-    - Class: jsk_rviz_plugin/SegmentArray
+    - Class: jsk_rviz_plugin/SimpleOccupancyGridArray
       Enabled: true
-      Name: SegmentArray
+      Name: SimpleOccupancyGridArray
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /segment_array_sample/output
+        Value: /occupancy_grid
       Value: true
   Enabled: true
   Global Options:

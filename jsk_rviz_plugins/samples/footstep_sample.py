@@ -1,23 +1,24 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-FRAME_ID = "/map"
+FRAME_ID = "map"
+
+import time
 
 from jsk_footstep_msgs.msg import Footstep, FootstepArray
 
-import rospy
+import rclpy
 
-def main():
-    pub = rospy.Publisher("/footsteps", FootstepArray)
-    r = rospy.Rate(3)
+def main(node):
+    pub = node.create_publisher(FootstepArray, "/footsteps", 1)
     ysize = 0
-    zpos = 0
-    while not rospy.is_shutdown():
+    zpos = 0.0
+    while rclpy.ok():
         msg = FootstepArray()
-        now = rospy.Time.now()
+        now = node.get_clock().now().to_msg()
         msg.header.frame_id = FRAME_ID
         msg.header.stamp = now
-        xpos = 0
-        
+        xpos = 0.0
+
         for i in range(20):
             footstep = Footstep()
             if i % 2 == 0:
@@ -32,7 +33,7 @@ def main():
             footstep.dimensions.x = 0.25
             footstep.dimensions.y = 0.15
             footstep.dimensions.z = 0.01
-            footstep.footstep_group = i / 5
+            footstep.footstep_group = i // 5
             msg.footsteps.append(footstep)
             xpos = xpos + 0.25
             zpos = zpos + 0.1
@@ -42,9 +43,9 @@ def main():
             if zpos > 0.5:
                 zpos = 0.0
         pub.publish(msg)
-        r.sleep()
+        time.sleep(1.0 / 3)
 
 if __name__ == "__main__":
-    rospy.init_node("footstep_sample")
-    main()
-    
+    rclpy.init()
+    node = rclpy.create_node("footstep_sample")
+    main(node)

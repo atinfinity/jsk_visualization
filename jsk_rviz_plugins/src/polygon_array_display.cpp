@@ -33,11 +33,13 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#define BOOST_PARAMETER_MAX_ARITY 7
-
 #include "polygon_array_display.h"
-#include "rviz/properties/parse_color.h"
-#include <rviz/validate_floats.h>
+#include <rviz_common/properties/parse_color.hpp>
+#include <rviz_common/properties/status_property.hpp>
+#include <rviz_common/validate_floats.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/logging.hpp>
 #include <jsk_topic_tools/color_utils.h>
 #include <jsk_recognition_utils/geo/polygon.h>
 
@@ -45,7 +47,7 @@ namespace jsk_rviz_plugins
 {
   PolygonArrayDisplay::PolygonArrayDisplay()
   {
-    coloring_property_ = new rviz::EnumProperty(
+    coloring_property_ = new rviz_common::properties::EnumProperty(
       "coloring", "Auto",
       "coloring method",
       this, SLOT(updateColoring()));
@@ -53,27 +55,27 @@ namespace jsk_rviz_plugins
     coloring_property_->addOption("Flat color", 1);
     coloring_property_->addOption("Liekelihood", 2);
     coloring_property_->addOption("Label", 3);
-    color_property_ = new rviz::ColorProperty(
+    color_property_ = new rviz_common::properties::ColorProperty(
       "Color", QColor(25, 255, 0),
       "Color to draw the polygons.",
       this, SLOT(queueRender()));
-    alpha_property_ = new rviz::FloatProperty(
+    alpha_property_ = new rviz_common::properties::FloatProperty(
       "Alpha", 1.0,
       "Amount of transparency to apply to the polygon.",
       this, SLOT(queueRender()));
-    only_border_property_ = new rviz::BoolProperty(
+    only_border_property_ = new rviz_common::properties::BoolProperty(
       "only border", true,
       "only shows the borders of polygons",
       this, SLOT(updateOnlyBorder()));
-    show_normal_property_ = new rviz::BoolProperty(
+    show_normal_property_ = new rviz_common::properties::BoolProperty(
       "show normal", true,
       "show normal direction",
       this, SLOT(updateShowNormal()));
-    enable_lighting_property_ = new rviz::BoolProperty(
+    enable_lighting_property_ = new rviz_common::properties::BoolProperty(
       "enable lighting", true,
       "enable lighting",
       this, SLOT(updateEnableLighting()));
-    normal_length_property_ = new rviz::FloatProperty(
+    normal_length_property_ = new rviz_common::properties::FloatProperty(
       "normal length", 0.1,
       "normal length",
       this, SLOT(updateNormalLength()));
@@ -115,7 +117,7 @@ namespace jsk_rviz_plugins
     updateNormalLength();
   }
 
-  void PolygonArrayDisplay::allocateMaterials(int num)
+  void PolygonArrayDisplay::allocateMaterials(size_t num)
   {
     if (only_border_) {
       return;
@@ -139,10 +141,10 @@ namespace jsk_rviz_plugins
     }
   }
   
-  bool validateFloats(const jsk_recognition_msgs::PolygonArray& msg)
+  bool validateFloats(const jsk_recognition_msgs::msg::PolygonArray& msg)
   {
     for (size_t i = 0; i < msg.polygons.size(); i++) {
-      if (!rviz::validateFloats(msg.polygons[i].polygon.points))
+      if (!rviz_common::validateFloats(msg.polygons[i].polygon.points))
         return false;
     }
     return true;
@@ -157,7 +159,7 @@ namespace jsk_rviz_plugins
   }
 
   void PolygonArrayDisplay::updateSceneNodes(
-    const jsk_recognition_msgs::PolygonArray::ConstPtr& msg)
+    const jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr& msg)
   {
     int scale_factor = 2;
     if (only_border_) {
@@ -187,7 +189,7 @@ namespace jsk_rviz_plugins
     if (msg->polygons.size() > arrow_objects_.size()) {
       for (size_t i = arrow_objects_.size(); i < msg->polygons.size(); i++) {
         Ogre::SceneNode* scene_node = scene_node_->createChildSceneNode();
-        ArrowPtr arrow (new rviz::Arrow(scene_manager_, scene_node));
+        ArrowPtr arrow (new rviz_rendering::Arrow(scene_manager_, scene_node));
         scene_node->setVisible(false);
         arrow_objects_.push_back(arrow);
         arrow_nodes_.push_back(scene_node);
@@ -201,12 +203,12 @@ namespace jsk_rviz_plugins
     }
   }
 
-  void PolygonArrayDisplay::updateLines(int num)
+  void PolygonArrayDisplay::updateLines(size_t num)
   {
     if (num > lines_.size()) {
       for (size_t i = lines_.size(); i < num; i++) {
-        rviz::BillboardLine* line
-          = new rviz::BillboardLine(context_->getSceneManager(),
+        rviz_rendering::BillboardLine* line
+          = new rviz_rendering::BillboardLine(context_->getSceneManager(),
                                     scene_nodes_[i]);
         line->setLineWidth(0.01);
         line->setNumLines(1);
@@ -222,24 +224,24 @@ namespace jsk_rviz_plugins
   {
     Ogre::ColourValue color;
     if (coloring_method_ == "auto") {
-      std_msgs::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
+      std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
       color.r = ros_color.r;
       color.g = ros_color.g;
       color.b = ros_color.b;
       color.a = ros_color.a;
     }
     else if (coloring_method_ == "flat") {
-      color = rviz::qtToOgre(color_property_->getColor());
+      color = rviz_common::properties::qtToOgre(color_property_->getColor());
     }
     else if (coloring_method_ == "likelihood") {
       if (latest_msg_->likelihood.size() == 0 ||
           latest_msg_->likelihood.size() < index) {
-        setStatus(rviz::StatusProperty::Error,
+        setStatus(rviz_common::properties::StatusProperty::Error,
                   "Topic",
                   "Message does not have lieklihood fields");
       }
       else {
-        std_msgs::ColorRGBA ros_color
+        std_msgs::msg::ColorRGBA ros_color
           = jsk_topic_tools::heatColor(latest_msg_->likelihood[index]);
         color.r = ros_color.r;
         color.g = ros_color.g;
@@ -250,12 +252,12 @@ namespace jsk_rviz_plugins
     else if (coloring_method_ == "label") {
       if (latest_msg_->labels.size() == 0 ||
           latest_msg_->labels.size() < index) {
-        setStatus(rviz::StatusProperty::Error,
+        setStatus(rviz_common::properties::StatusProperty::Error,
                   "Topic",
                   "Message does not have lebels fields");
       }
       else {
-        std_msgs::ColorRGBA ros_color
+        std_msgs::msg::ColorRGBA ros_color
           = jsk_topic_tools::colorCategory20(latest_msg_->labels[index]);
         color.r = ros_color.r;
         color.g = ros_color.g;
@@ -269,7 +271,7 @@ namespace jsk_rviz_plugins
 
   void PolygonArrayDisplay::processLine(
     const size_t i,
-    const geometry_msgs::PolygonStamped& polygon)
+    const geometry_msgs::msg::PolygonStamped& polygon)
   {
     Ogre::SceneNode* scene_node = scene_nodes_[i];
     //Ogre::ManualObject* manual_object = manual_objects_[i];
@@ -279,7 +281,7 @@ namespace jsk_rviz_plugins
       return;
     scene_node->setPosition(position);
     scene_node->setOrientation(orientation);
-    rviz::BillboardLine* line = lines_[i];
+    rviz_rendering::BillboardLine* line = lines_[i];
     line->clear();
     line->setMaxPointsPerLine(polygon.polygon.points.size() + 1);
         
@@ -321,7 +323,7 @@ namespace jsk_rviz_plugins
   }
 
   void PolygonArrayDisplay::processPolygon(
-    const size_t i, const geometry_msgs::PolygonStamped& polygon)
+    const size_t i, const geometry_msgs::msg::PolygonStamped& polygon)
   {
     Ogre::Vector3 position;
     Ogre::Quaternion orientation;
@@ -370,7 +372,7 @@ namespace jsk_rviz_plugins
   }
   
   void PolygonArrayDisplay::processNormal(
-    const size_t i, const geometry_msgs::PolygonStamped& polygon)
+    const size_t i, const geometry_msgs::msg::PolygonStamped& polygon)
   {
     Ogre::SceneNode* scene_node = arrow_nodes_[i];
     scene_node->setVisible(true);
@@ -387,7 +389,7 @@ namespace jsk_rviz_plugins
       = geo_polygon.getVertices();
     Eigen::Vector3f centroid(0, 0, 0); // should be replaced by centroid method
     if (vertices.size() == 0) {
-      ROS_ERROR("the size of vertices is 0");
+      RVIZ_COMMON_LOG_ERROR("the size of vertices is 0");
     }
     else {
       for (size_t j = 0; j < vertices.size(); j++) {
@@ -399,7 +401,7 @@ namespace jsk_rviz_plugins
     Eigen::Vector3f normal = geo_polygon.getNormal();
     Ogre::Vector3 direction(normal[0], normal[1], normal[2]);
     if (std::isnan(direction[0]) || std::isnan(direction[1]) || std::isnan(direction[2])) {
-      ROS_ERROR("failed to compute normal direction");
+      RVIZ_COMMON_LOG_ERROR("failed to compute normal direction");
       Ogre::Vector3 zeroscale(0, 0, 0);
       arrow->setScale(zeroscale);
       return;
@@ -413,16 +415,16 @@ namespace jsk_rviz_plugins
   }
   
   void PolygonArrayDisplay::processMessage(
-    const jsk_recognition_msgs::PolygonArray::ConstPtr& msg)
+    jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr msg)
   {
     if (!validateFloats(*msg)) {
-      setStatus(rviz::StatusProperty::Error,
+      setStatus(rviz_common::properties::StatusProperty::Error,
                 "Topic",
                 "Message contained invalid floating point values"
                 "(nans or infs)");
       return;
     }
-    setStatus(rviz::StatusProperty::Ok,
+    setStatus(rviz_common::properties::StatusProperty::Ok,
               "Topic",
               "ok");
     latest_msg_ = msg;
@@ -436,7 +438,7 @@ namespace jsk_rviz_plugins
         manual_objects_[i]->setVisible(false);
       }
       for (size_t i = 0; i < msg->polygons.size(); i++) {
-        geometry_msgs::PolygonStamped polygon = msg->polygons[i];
+        geometry_msgs::msg::PolygonStamped polygon = msg->polygons[i];
         if (polygon.polygon.points.size() >= 3) {
           processLine(i, polygon);
         }
@@ -448,14 +450,14 @@ namespace jsk_rviz_plugins
       }
       
       for (size_t i = 0; i < msg->polygons.size(); i++) {
-        geometry_msgs::PolygonStamped polygon = msg->polygons[i];
+        geometry_msgs::msg::PolygonStamped polygon = msg->polygons[i];
         processPolygon(i, polygon);
       }
     }
 
     if (show_normal_) {
       for (size_t i = 0; i < msg->polygons.size(); i++) {
-        geometry_msgs::PolygonStamped polygon = msg->polygons[i];
+        geometry_msgs::msg::PolygonStamped polygon = msg->polygons[i];
         if (polygon.polygon.points.size() >= 3) {
           processNormal(i, polygon);
         }
@@ -464,19 +466,18 @@ namespace jsk_rviz_plugins
   }
 
   bool PolygonArrayDisplay::getTransform(
-      const std_msgs::Header &header,
+      const std_msgs::msg::Header &header,
       Ogre::Vector3 &position, Ogre::Quaternion &orientation)
   {
     bool ok = context_->getFrameManager()->getTransform(
-        header.frame_id, header.stamp,
-        position, orientation);
+        header, position, orientation);
     if (!ok) {
       std::ostringstream oss;
       oss << "Error transforming from frame '";
       oss << header.frame_id << "' to frame '";
       oss << qPrintable(fixed_frame_) << "'";
-      ROS_DEBUG_STREAM(oss.str());
-      setStatus(rviz::StatusProperty::Error,
+      RVIZ_COMMON_LOG_DEBUG_STREAM(oss.str());
+      setStatus(rviz_common::properties::StatusProperty::Error,
                 "Transform", QString::fromStdString(oss.str()));
     }
     return ok;
@@ -532,5 +533,5 @@ namespace jsk_rviz_plugins
   }
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::PolygonArrayDisplay, rviz::Display)
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(jsk_rviz_plugins::PolygonArrayDisplay, rviz_common::Display)

@@ -1,4 +1,4 @@
-// -*- mode: c++; -*-
+// -*- mode: c++ -*-
 /*********************************************************************
  * Software License Agreement (BSD License)
  *
@@ -33,49 +33,33 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#ifndef JSK_RVIZ_PLUGINS_SIMPLE_OCCUPANCY_GRID_ARRAY_DISPLAY_H_
-#define JSK_RVIZ_PLUGINS_SIMPLE_OCCUPANCY_GRID_ARRAY_DISPLAY_H_
 
-#ifndef Q_MOC_RUN
-#include <jsk_recognition_msgs/msg/simple_occupancy_grid_array.hpp>
-#include <rviz_common/message_filter_display.hpp>
-#include <rviz_common/properties/float_property.hpp>
-#include <rviz_common/properties/bool_property.hpp>
-#include <rviz_rendering/objects/shape.hpp>
-#include <rviz_common/properties/color_property.hpp>
-#include <rviz_rendering/objects/point_cloud.hpp>
-#include <memory>
-#endif
+#ifndef JSK_TOPIC_TOOLS_COLOR_UTILS_H_
+#define JSK_TOPIC_TOOLS_COLOR_UTILS_H_
 
-namespace jsk_rviz_plugins
+#include <std_msgs/msg/color_rgba.hpp>
+
+/**
+ * @file color_utils.h
+ * @brief Provide color utility functions
+ */
+
+namespace jsk_topic_tools
 {
-  class SimpleOccupancyGridArrayDisplay:
-    public rviz_common::MessageFilterDisplay<
-    jsk_recognition_msgs::msg::SimpleOccupancyGridArray>
-  {
-    Q_OBJECT
-  public:
-    typedef std::shared_ptr<rviz_rendering::PointCloud> PointCloudPtr;
-    SimpleOccupancyGridArrayDisplay();
-    virtual ~SimpleOccupancyGridArrayDisplay();
-  protected:
-    void onInitialize() override;
-    void reset() override;
-    virtual void allocateCloudsAndNodes(const size_t num);
-    rviz_common::properties::FloatProperty* alpha_property_;
-    rviz_common::properties::BoolProperty* auto_color_property_;
-    double alpha_;
-    std::vector<rviz_rendering::PointCloud*> clouds_;
-    std::vector<Ogre::SceneNode*> nodes_;
-    bool auto_color_;
-  private:
-    void processMessage(
-      jsk_recognition_msgs::msg::SimpleOccupancyGridArray::ConstSharedPtr msg) override;
-  private Q_SLOTS:
-    void updateAlpha();
-    void updateAutoColor();
-  };
+  /** @brief choose a color out of 20 good selected colors
+   *
+   * The color format is same as d3.js (https://github.com/mbostock/d3/wiki/Ordinal-Scales#category20)
+   * @param[in] i index value
+   * @return return std_msgs::msg::ColorRGBA and each value is in range between 0 and 1.
+   */
+  std_msgs::msg::ColorRGBA colorCategory20(int i);
 
+  /** @brief returns heat-map color (http://en.wikipedia.org/wiki/Heat_map)
+   *
+   * @param[in] v Value to colorize. This should be in [0.0:1.0]
+   * @return return std_msgs::msg::ColorRGBA and each value is in range between 0 and 1.
+   */
+  std_msgs::msg::ColorRGBA heatColor(double v);
 }
 
 #endif

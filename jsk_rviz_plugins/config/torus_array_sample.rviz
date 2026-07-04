@@ -22,20 +22,20 @@ Visualization Manager:
       Enabled: true
       Name: Grid
       Value: true
-    - Class: jsk_rviz_plugin/SegmentArray
+    - Class: jsk_rviz_plugin/TorusArray
       Enabled: true
-      Name: SegmentArray
+      Name: TorusArray
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /segment_array_sample/output
+        Value: /test_torus
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: map
+    Fixed Frame: base_link
     Frame Rate: 30
   Name: root
   Tools:

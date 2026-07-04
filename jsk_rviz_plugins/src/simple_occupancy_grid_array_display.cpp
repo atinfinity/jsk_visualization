@@ -32,24 +32,25 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 #include "simple_occupancy_grid_array_display.h"
 #include <Eigen/Geometry>
-#include <jsk_recognition_utils/pcl_conversion_util.h>
 #include <jsk_topic_tools/color_utils.h>
-#include "rviz_util.h"
 #include <jsk_recognition_utils/geo/plane.h>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/properties/status_property.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
 
 namespace jsk_rviz_plugins
 {
   SimpleOccupancyGridArrayDisplay::SimpleOccupancyGridArrayDisplay()
   {
-    auto_color_property_ = new rviz::BoolProperty(
+    auto_color_property_ = new rviz_common::properties::BoolProperty(
       "Auto Color", true,
       "Auto coloring",
       this, SLOT(updateAutoColor()));
     
-    alpha_property_ = new rviz::FloatProperty(
+    alpha_property_ = new rviz_common::properties::FloatProperty(
       "Alpha", 1.0,
       "Amount of transparency to apply to the polygon.",
       this, SLOT(updateAlpha()));
@@ -78,8 +79,8 @@ namespace jsk_rviz_plugins
     if (num > clouds_.size()) { // need to allocate new node and clouds
       for (size_t i = clouds_.size(); i < num; i++) {
         Ogre::SceneNode* node = scene_node_->createChildSceneNode();
-        rviz::PointCloud* cloud = new rviz::PointCloud();
-        cloud->setRenderMode(rviz::PointCloud::RM_TILES);
+        rviz_rendering::PointCloud* cloud = new rviz_rendering::PointCloud();
+        cloud->setRenderMode(rviz_rendering::PointCloud::RM_TILES);
         cloud->setCommonDirection( Ogre::Vector3::UNIT_Z );
         cloud->setCommonUpVector( Ogre::Vector3::UNIT_Y );
         node->attachObject(cloud);
@@ -106,22 +107,31 @@ namespace jsk_rviz_plugins
   }
 
   void SimpleOccupancyGridArrayDisplay::processMessage(
-    const jsk_recognition_msgs::SimpleOccupancyGridArray::ConstPtr& msg)
+    jsk_recognition_msgs::msg::SimpleOccupancyGridArray::ConstSharedPtr msg)
   {
     Ogre::ColourValue white(1, 1, 1, 1);
     allocateCloudsAndNodes(msg->grids.size()); // not enough
     for (size_t i = 0; i < msg->grids.size(); i++) {
       Ogre::SceneNode* node = nodes_[i];
-      rviz::PointCloud* cloud = clouds_[i];
-      const jsk_recognition_msgs::SimpleOccupancyGrid grid = msg->grids[i];
+      rviz_rendering::PointCloud* cloud = clouds_[i];
+      const jsk_recognition_msgs::msg::SimpleOccupancyGrid grid = msg->grids[i];
       Ogre::Vector3 position;
       Ogre::Quaternion quaternion;
       
       // coefficients
-      geometry_msgs::Pose plane_pose;
-      jsk_recognition_utils::Plane::Ptr plane(new jsk_recognition_utils::Plane(grid.coefficients));
+      geometry_msgs::msg::Pose plane_pose;
+      jsk_recognition_utils::Plane::Ptr plane(new jsk_recognition_utils::Plane(
+        std::vector<float>(grid.coefficients.begin(), grid.coefficients.end())));
       Eigen::Affine3f plane_pose_eigen = plane->coordinates();
-      tf::poseEigenToMsg(plane_pose_eigen, plane_pose);
+      Eigen::Vector3f plane_translation(plane_pose_eigen.translation());
+      Eigen::Quaternionf plane_rotation(plane_pose_eigen.rotation());
+      plane_pose.position.x = plane_translation[0];
+      plane_pose.position.y = plane_translation[1];
+      plane_pose.position.z = plane_translation[2];
+      plane_pose.orientation.x = plane_rotation.x();
+      plane_pose.orientation.y = plane_rotation.y();
+      plane_pose.orientation.z = plane_rotation.z();
+      plane_pose.orientation.w = plane_rotation.w();
       if(!context_->getFrameManager()->transform(grid.header, plane_pose,
                                                  position,
                                                  quaternion)) {
@@ -129,19 +139,20 @@ namespace jsk_rviz_plugins
         oss << "Error transforming pose";
         oss << " from frame '" << grid.header.frame_id << "'";
         oss << " to frame '" << qPrintable(fixed_frame_) << "'";
-        ROS_ERROR_STREAM(oss.str());
-        setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+        RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+        setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
         return;
       }
       node->setPosition(position);
       node->setOrientation(quaternion);
       cloud->setDimensions(grid.resolution, grid.resolution, 0.0);
-      std::vector<rviz::PointCloud::Point> points;
+      std::vector<rviz_rendering::PointCloud::Point> points;
       for (size_t ci = 0; ci < grid.cells.size(); ci++) {
-        const geometry_msgs::Point p = grid.cells[ci];
-        rviz::PointCloud::Point point;
+        const geometry_msgs::msg::Point p = grid.cells[ci];
+        rviz_rendering::PointCloud::Point point;
         if (auto_color_) {
-          point.color = rviz::colorMsgToOgre(jsk_topic_tools::colorCategory20(i));
+          std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(i);
+          point.color = Ogre::ColourValue(ros_color.r, ros_color.g, ros_color.b, ros_color.a);
         }
         else {
           point.color = white;
@@ -154,7 +165,7 @@ namespace jsk_rviz_plugins
       cloud->clear();
       cloud->setAlpha(alpha_);
       if (!points.empty()) {
-        cloud->addPoints(&points.front(), points.size());
+        cloud->addPoints(points.begin(), points.end());
       }
     }
     context_->queueRender();
@@ -172,6 +183,6 @@ namespace jsk_rviz_plugins
 
 }
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::SimpleOccupancyGridArrayDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::SimpleOccupancyGridArrayDisplay, rviz_common::Display )
 

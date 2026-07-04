@@ -1,9 +1,9 @@
 #ifndef __AMBIENT_SOUND_VISUAL__
 #define __AMBIENT_SOUND_VISUAL__
 
-#include <jsk_hark_msgs/HarkPower.h>
-#include <OGRE/OgreVector3.h>
-#include <OGRE/OgreQuaternion.h>
+#include <jsk_hark_msgs/msg/hark_power.hpp>
+#include <OgreVector3.h>
+#include <OgreQuaternion.h>
 
 namespace Ogre
 {
@@ -13,7 +13,7 @@ class SceneNode;
 //class Quaternion;
 }
 
-namespace rviz
+namespace rviz_rendering
 {
 class BillboardLine;
 //class Axes;
@@ -40,7 +40,7 @@ public:
   virtual ~AmbientSoundVisual();
 
   // Configure the visual to show the data in the message.
-  void setMessage( const jsk_hark_msgs::HarkPower::ConstPtr& msg );
+  void setMessage( jsk_hark_msgs::msg::HarkPower::ConstSharedPtr msg );
 
   // Set the pose of the coordinate frame the message refers to.
   // These could be done inside setMessage(), but that would require
@@ -61,8 +61,8 @@ public:
 
 private:
   // The object implementing the actual arrow shape
-  rviz::BillboardLine* ambient_sound_power_line_;
-  //rviz::Axes* axes_;
+  rviz_rendering::BillboardLine* ambient_sound_power_line_;
+  //rviz_rendering::Axes* axes_;
 
   // A SceneNode whose pose is set to match the coordinate frame of
   // the Imu message header.

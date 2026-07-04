@@ -34,26 +34,29 @@
 
 #include "human_skeleton_array_display.h"
 #include <jsk_topic_tools/color_utils.h>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
 namespace jsk_rviz_plugins
 {
   HumanSkeletonArrayDisplay::HumanSkeletonArrayDisplay()
   {
-    coloring_property_ = new rviz::EnumProperty(
+    coloring_property_ = new rviz_common::properties::EnumProperty(
       "coloring", "Auto",
       "coloring method",
       this, SLOT(updateColoring()));
     coloring_property_->addOption("Auto", 0);
     coloring_property_->addOption("Flat color", 1);
 
-    color_property_ = new rviz::ColorProperty(
+    color_property_ = new rviz_common::properties::ColorProperty(
       "color", QColor(25, 255, 0),
       "color to draw the edges",
       this, SLOT(updateColor()));
-    alpha_property_ = new rviz::FloatProperty(
+    alpha_property_ = new rviz_common::properties::FloatProperty(
       "alpha", 1.0,
       "alpha value to draw the edges",
       this, SLOT(updateAlpha()));
-    line_width_property_ = new rviz::FloatProperty(
+    line_width_property_ = new rviz_common::properties::FloatProperty(
       "line width", 0.005,
       "line width of the edges",
       this, SLOT(updateLineWidth()));
@@ -69,7 +72,7 @@ namespace jsk_rviz_plugins
   QColor HumanSkeletonArrayDisplay::getColor(size_t index)
   {
     if (coloring_method_ == "auto") {
-      std_msgs::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
+      std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
       return QColor(ros_color.r * 255.0,
                     ros_color.g * 255.0,
                     ros_color.b * 255.0,
@@ -78,6 +81,7 @@ namespace jsk_rviz_plugins
     else if (coloring_method_ == "flat") {
       return color_;
     }
+    return QColor(255, 255, 255, 255);
   }
 
   void HumanSkeletonArrayDisplay::onInitialize()
@@ -138,11 +142,11 @@ namespace jsk_rviz_plugins
     latest_msg_.reset();
   }
 
-  void HumanSkeletonArrayDisplay::allocateSpheres(int num) {
+  void HumanSkeletonArrayDisplay::allocateSpheres(size_t num) {
     if (num > shapes_.size()) {
       for (size_t i = shapes_.size(); i < num; i++) {
         ShapePtr shape;
-        shape.reset(new rviz::Shape(rviz::Shape::Sphere, context_->getSceneManager(),
+        shape.reset(new rviz_rendering::Shape(rviz_rendering::Shape::Sphere, context_->getSceneManager(),
                                     scene_node_));
         shapes_.push_back(shape);
       }
@@ -152,11 +156,11 @@ namespace jsk_rviz_plugins
     }
   }
 
-  void HumanSkeletonArrayDisplay::allocateBillboardLines(int num)
+  void HumanSkeletonArrayDisplay::allocateBillboardLines(size_t num)
   {
     if (num > edges_.size()) {
       for (size_t i = edges_.size(); i < num; i++) {
-        BillboardLinePtr line(new rviz::BillboardLine(
+        BillboardLinePtr line(new rviz_rendering::BillboardLine(
                                                       this->context_->getSceneManager(), this->scene_node_));
         edges_.push_back(line);
       }
@@ -168,9 +172,9 @@ namespace jsk_rviz_plugins
   }
 
   void HumanSkeletonArrayDisplay::showEdges(
-    const jsk_recognition_msgs::HumanSkeletonArray::ConstPtr& msg)
+    const jsk_recognition_msgs::msg::HumanSkeletonArray::ConstSharedPtr& msg)
   {
-    int line_num = 0;
+    size_t line_num = 0;
     for (size_t i = 0; i < msg->skeletons.size(); i++) {
       line_num = line_num + msg->skeletons[i].bones.size();
     }
@@ -179,14 +183,14 @@ namespace jsk_rviz_plugins
     int line_i = 0;
     for (size_t i = 0; i < msg->skeletons.size(); i++) {
       for (size_t j = 0; j < msg->skeletons[i].bones.size(); j++) {
-        jsk_recognition_msgs::Segment edge_msg = msg->skeletons[i].bones[j];
+        jsk_recognition_msgs::msg::Segment edge_msg = msg->skeletons[i].bones[j];
         BillboardLinePtr edge = edges_[line_i];
         ShapePtr start_shape = shapes_[2 * line_i];
         ShapePtr end_shape = shapes_[2 * line_i + 1];
         edge->clear();
 
-        geometry_msgs::Pose start_pose_local;
-        geometry_msgs::Pose end_pose_local;
+        geometry_msgs::msg::Pose start_pose_local;
+        geometry_msgs::msg::Pose end_pose_local;
         start_pose_local.position = edge_msg.start_point;
         start_pose_local.orientation.w = 1.0;
         end_pose_local.position = edge_msg.end_point;
@@ -200,10 +204,10 @@ namespace jsk_rviz_plugins
           context_->getFrameManager()->transform(msg->header, start_pose_local, start_point, quaternion)
           && context_->getFrameManager()->transform(msg->header, end_pose_local, end_point, quaternion);
         if(!transform_ret) {
-          ROS_ERROR( "Error transforming pose"
-                     "'%s' from frame '%s' to frame '%s'",
-                     qPrintable( getName() ), msg->header.frame_id.c_str(),
-                     qPrintable( fixed_frame_ ));
+          RVIZ_COMMON_LOG_ERROR_STREAM(
+            "Error transforming pose '" << qPrintable(getName())
+            << "' from frame '" << msg->header.frame_id
+            << "' to frame '" << qPrintable(fixed_frame_) << "'");
           return;                 // return?
         }
         edge->addPoint(start_point);
@@ -239,7 +243,7 @@ namespace jsk_rviz_plugins
   }
 
   void HumanSkeletonArrayDisplay::processMessage(
-    const jsk_recognition_msgs::HumanSkeletonArray::ConstPtr& msg)
+    jsk_recognition_msgs::msg::HumanSkeletonArray::ConstSharedPtr msg)
   {
     // Store latest message
     latest_msg_ = msg;
@@ -248,6 +252,6 @@ namespace jsk_rviz_plugins
   }
 }
 
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(
-  jsk_rviz_plugins::HumanSkeletonArrayDisplay, rviz::Display)
+  jsk_rviz_plugins::HumanSkeletonArrayDisplay, rviz_common::Display)

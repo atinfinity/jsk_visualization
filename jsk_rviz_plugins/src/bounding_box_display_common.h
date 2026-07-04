@@ -36,39 +36,38 @@
 #define JSK_RVIZ_PLUGINS_BOUDNING_BOX_DISPLAY_COMMON_H_
 
 #ifndef Q_MOC_RUN
-#include "bounding_box_display_common.h"
-#include <jsk_recognition_msgs/BoundingBoxArray.h>
+#include <jsk_recognition_msgs/msg/bounding_box_array.hpp>
 #include <jsk_topic_tools/color_utils.h>
-#include <rviz/properties/color_property.h>
-#include <rviz/properties/bool_property.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/properties/enum_property.h>
-#include <rviz/message_filter_display.h>
-#include <rviz/ogre_helpers/shape.h>
-#include <rviz/ogre_helpers/billboard_line.h>
-#include <rviz/ogre_helpers/arrow.h>
-#include <OGRE/OgreSceneManager.h>
-#include <OGRE/OgreSceneNode.h>
+#include <rviz_common/properties/color_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/enum_property.hpp>
+#include <rviz_common/properties/status_property.hpp>
+#include <rviz_common/message_filter_display.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/logging.hpp>
+#include <rviz_rendering/objects/shape.hpp>
+#include <rviz_rendering/objects/billboard_line.hpp>
+#include <rviz_rendering/objects/arrow.hpp>
+#include <OgreSceneManager.h>
+#include <OgreSceneNode.h>
+#include <cfloat>
+#include <memory>
 #endif
 
 namespace jsk_rviz_plugins
 {
 
   template <class MessageType>
-  class BoundingBoxDisplayCommon: public rviz::MessageFilterDisplay<MessageType>
+  class BoundingBoxDisplayCommon: public rviz_common::MessageFilterDisplay<MessageType>
   {
 public:
     BoundingBoxDisplayCommon() {};
     ~BoundingBoxDisplayCommon() {};
-#if ROS_VERSION_MINIMUM(1,12,0)
-    typedef std::shared_ptr<rviz::Shape> ShapePtr;
-    typedef std::shared_ptr<rviz::BillboardLine> BillboardLinePtr;
-    typedef std::shared_ptr<rviz::Arrow> ArrowPtr;
-#else
-    typedef boost::shared_ptr<rviz::Shape> ShapePtr;
-    typedef boost::shared_ptr<rviz::BillboardLine> BillboardLinePtr;
-    typedef boost::shared_ptr<rviz::Arrow> ArrowPtr;
-#endif
+    typedef std::shared_ptr<rviz_rendering::Shape> ShapePtr;
+    typedef std::shared_ptr<rviz_rendering::BillboardLine> BillboardLinePtr;
+    typedef std::shared_ptr<rviz_rendering::Arrow> ArrowPtr;
 
 protected:
     QColor color_;
@@ -87,12 +86,12 @@ protected:
 
     QColor getColor(
       size_t index,
-      const jsk_recognition_msgs::BoundingBox& box,
+      const jsk_recognition_msgs::msg::BoundingBox& box,
       double min_value,
       double max_value)
     {
       if (coloring_method_ == "auto") {
-        std_msgs::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
+        std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
         return QColor(ros_color.r * 255.0,
                       ros_color.g * 255.0,
                       ros_color.b * 255.0,
@@ -102,7 +101,7 @@ protected:
         return color_;
       }
       else if (coloring_method_ == "label") {
-        std_msgs::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(box.label);
+        std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(box.label);
         return QColor(ros_color.r * 255.0,
                       ros_color.g * 255.0,
                       ros_color.b * 255.0,
@@ -110,7 +109,7 @@ protected:
       }
       else if (coloring_method_ == "value") {
         if (min_value != max_value) {
-          std_msgs::ColorRGBA ros_color = jsk_topic_tools::heatColor((box.value - min_value) / (max_value - min_value));
+          std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::heatColor((box.value - min_value) / (max_value - min_value));
           return QColor(ros_color.r * 255.0,
                         ros_color.g * 255.0,
                         ros_color.b * 255.0,
@@ -120,7 +119,7 @@ protected:
       return QColor(255.0, 255.0, 255.0, 255.0);
     }
 
-    double getAlpha(const jsk_recognition_msgs::BoundingBox& box)
+    double getAlpha(const jsk_recognition_msgs::msg::BoundingBox& box)
     {
       if (alpha_method_ == "flat") {
         return alpha_;
@@ -129,12 +128,12 @@ protected:
       {
         return alpha_min_ + box.value * (alpha_max_ - alpha_min_);
       }
-      ROS_WARN_THROTTLE(10, "unknown alpha method");
+      RVIZ_COMMON_LOG_WARNING("unknown alpha method");
       return 1.0;
     }
 
     bool isValidBoundingBox(
-      const jsk_recognition_msgs::BoundingBox box_msg)
+      const jsk_recognition_msgs::msg::BoundingBox box_msg)
     {
       // Check size
       if (box_msg.dimensions.x < 1.0e-9 ||
@@ -149,12 +148,12 @@ protected:
       return true;
     }
 
-    void allocateShapes(int num)
+    void allocateShapes(size_t num)
     {
       if (num > shapes_.size()) {
         for (size_t i = shapes_.size(); i < num; i++) {
-          ShapePtr shape (new rviz::Shape(
-                            rviz::Shape::Cube, this->context_->getSceneManager(),
+          ShapePtr shape (new rviz_rendering::Shape(
+                            rviz_rendering::Shape::Cube, this->context_->getSceneManager(),
                             this->scene_node_));
           shapes_.push_back(shape);
         }
@@ -165,11 +164,11 @@ protected:
       }
     }
 
-    void allocateBillboardLines(int num)
+    void allocateBillboardLines(size_t num)
     {
       if (num > edges_.size()) {
         for (size_t i = edges_.size(); i < num; i++) {
-          BillboardLinePtr line(new rviz::BillboardLine(
+          BillboardLinePtr line(new rviz_rendering::BillboardLine(
                                   this->context_->getSceneManager(), this->scene_node_));
           edges_.push_back(line);
         }
@@ -180,14 +179,14 @@ protected:
         }
     }
 
-    void allocateCoords(int num)
+    void allocateCoords(size_t num)
     {
       if (num > coords_objects_.size()) {
         for (size_t i = coords_objects_.size(); i < num; i++) {
           Ogre::SceneNode* scene_node = this->scene_node_->createChildSceneNode();
           std::vector<ArrowPtr> coord;
-          for (int i = 0; i < 3; i++) {
-            ArrowPtr arrow (new rviz::Arrow(this->scene_manager_, scene_node));
+          for (int j = 0; j < 3; j++) {
+            ArrowPtr arrow (new rviz_rendering::Arrow(this->scene_manager_, scene_node));
             coord.push_back(arrow);
           }
           coords_nodes_.push_back(scene_node);
@@ -208,16 +207,16 @@ protected:
     }
 
     void showBoxes(
-      const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& msg)
+      const jsk_recognition_msgs::msg::BoundingBoxArray::ConstSharedPtr& msg)
     {
       edges_.clear();
       float min_value = DBL_MAX;
       float max_value = -DBL_MAX;
       // filter boxes before drawing
       std::vector<int> box_indices;
-      std::vector<jsk_recognition_msgs::BoundingBox> boxes;
+      std::vector<jsk_recognition_msgs::msg::BoundingBox> boxes;
       for (size_t i = 0; i < msg->boxes.size(); i++) {
-        jsk_recognition_msgs::BoundingBox box = msg->boxes[i];
+        jsk_recognition_msgs::msg::BoundingBox box = msg->boxes[i];
         if (isValidBoundingBox(box)) {
           if (box.value < value_threshold_) {
             continue;
@@ -229,15 +228,17 @@ protected:
         }
         else
         {
-          ROS_WARN_THROTTLE(10, "Invalid size of bounding box is included and skipped: [%f, %f, %f]",
-            box.dimensions.x, box.dimensions.y, box.dimensions.z);
+          RVIZ_COMMON_LOG_WARNING_STREAM(
+            "Invalid size of bounding box is included and skipped: ["
+            << box.dimensions.x << ", " << box.dimensions.y << ", "
+            << box.dimensions.z << "]");
         }
       }
 
       // draw filtered boxes
       allocateShapes(boxes.size());
       for (size_t i = 0; i < boxes.size(); i++) {
-        jsk_recognition_msgs::BoundingBox box = boxes[i];
+        jsk_recognition_msgs::msg::BoundingBox box = boxes[i];
         ShapePtr shape = shapes_[i];
         Ogre::Vector3 position;
         Ogre::Quaternion orientation;
@@ -247,8 +248,8 @@ protected:
           oss << "Error transforming pose";
           oss << " from frame '" << box.header.frame_id << "'";
           oss << " to frame '" << qPrintable(this->fixed_frame_) << "'";
-          ROS_ERROR_STREAM(oss.str());
-          this->setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+          RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+          this->setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
           return;
         }
 
@@ -275,16 +276,16 @@ protected:
     }
 
     void showEdges(
-      const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& msg)
+      const jsk_recognition_msgs::msg::BoundingBoxArray::ConstSharedPtr& msg)
     {
       shapes_.clear();
       float min_value = DBL_MAX;
       float max_value = -DBL_MAX;
       // filter boxes before drawing
       std::vector<int> box_indices;
-      std::vector<jsk_recognition_msgs::BoundingBox> boxes;
+      std::vector<jsk_recognition_msgs::msg::BoundingBox> boxes;
       for (size_t i = 0; i < msg->boxes.size(); i++) {
-        jsk_recognition_msgs::BoundingBox box = msg->boxes[i];
+        jsk_recognition_msgs::msg::BoundingBox box = msg->boxes[i];
         if (isValidBoundingBox(box)) {
           if (box.value < value_threshold_) {
             continue;
@@ -296,16 +297,18 @@ protected:
         }
         else
         {
-          ROS_WARN_THROTTLE(10, "Invalid size of bounding box is included and skipped: [%f, %f, %f]",
-            box.dimensions.x, box.dimensions.y, box.dimensions.z);
+          RVIZ_COMMON_LOG_WARNING_STREAM(
+            "Invalid size of bounding box is included and skipped: ["
+            << box.dimensions.x << ", " << box.dimensions.y << ", "
+            << box.dimensions.z << "]");
         }
       }
 
       // draw filtered boxes
       allocateBillboardLines(boxes.size());
       for (size_t i = 0; i < boxes.size(); i++) {
-        jsk_recognition_msgs::BoundingBox box = boxes[i];
-        geometry_msgs::Vector3 dimensions = box.dimensions;
+        jsk_recognition_msgs::msg::BoundingBox box = boxes[i];
+        geometry_msgs::msg::Vector3 dimensions = box.dimensions;
 
         BillboardLinePtr edge = edges_[i];
         edge->clear();
@@ -318,8 +321,8 @@ protected:
           oss << "Error transforming pose";
           oss << " from frame '" << box.header.frame_id << "'";
           oss << " to frame '" << qPrintable(this->fixed_frame_) << "'";
-          ROS_ERROR_STREAM(oss.str());
-          this->setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+          RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+          this->setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
           return;
         }
         edge->setPosition(position);
@@ -361,39 +364,41 @@ protected:
         H[1] = - dimensions.y / 2.0;
         H[2] = - dimensions.z / 2.0;
 
-        edge->addPoint(A); edge->addPoint(B); edge->newLine();
-        edge->addPoint(B); edge->addPoint(C); edge->newLine();
-        edge->addPoint(C); edge->addPoint(D); edge->newLine();
-        edge->addPoint(D); edge->addPoint(A); edge->newLine();
-        edge->addPoint(E); edge->addPoint(F); edge->newLine();
-        edge->addPoint(F); edge->addPoint(G); edge->newLine();
-        edge->addPoint(G); edge->addPoint(H); edge->newLine();
-        edge->addPoint(H); edge->addPoint(E); edge->newLine();
-        edge->addPoint(A); edge->addPoint(E); edge->newLine();
-        edge->addPoint(B); edge->addPoint(F); edge->newLine();
-        edge->addPoint(C); edge->addPoint(G); edge->newLine();
+        edge->addPoint(A); edge->addPoint(B); edge->finishLine();
+        edge->addPoint(B); edge->addPoint(C); edge->finishLine();
+        edge->addPoint(C); edge->addPoint(D); edge->finishLine();
+        edge->addPoint(D); edge->addPoint(A); edge->finishLine();
+        edge->addPoint(E); edge->addPoint(F); edge->finishLine();
+        edge->addPoint(F); edge->addPoint(G); edge->finishLine();
+        edge->addPoint(G); edge->addPoint(H); edge->finishLine();
+        edge->addPoint(H); edge->addPoint(E); edge->finishLine();
+        edge->addPoint(A); edge->addPoint(E); edge->finishLine();
+        edge->addPoint(B); edge->addPoint(F); edge->finishLine();
+        edge->addPoint(C); edge->addPoint(G); edge->finishLine();
         edge->addPoint(D); edge->addPoint(H);
       }
     }
 
     void showCoords(
-      const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& msg)
+      const jsk_recognition_msgs::msg::BoundingBoxArray::ConstSharedPtr& msg)
     {
-      std::vector<jsk_recognition_msgs::BoundingBox> boxes;
+      std::vector<jsk_recognition_msgs::msg::BoundingBox> boxes;
       for (size_t i = 0; i < msg->boxes.size(); i++) {
-        jsk_recognition_msgs::BoundingBox box = msg->boxes[i];
+        jsk_recognition_msgs::msg::BoundingBox box = msg->boxes[i];
         if (isValidBoundingBox(box)) {
           boxes.push_back(box);
         }
         else
         {
-          ROS_WARN_THROTTLE(10, "Invalid size of bounding box is included and skipped: [%f, %f, %f]",
-            box.dimensions.x, box.dimensions.y, box.dimensions.z);
+          RVIZ_COMMON_LOG_WARNING_STREAM(
+            "Invalid size of bounding box is included and skipped: ["
+            << box.dimensions.x << ", " << box.dimensions.y << ", "
+            << box.dimensions.z << "]");
         }
       }
       allocateCoords(boxes.size());
       for (size_t i = 0; i < boxes.size(); i++) {
-        jsk_recognition_msgs::BoundingBox box = boxes[i];
+        jsk_recognition_msgs::msg::BoundingBox box = boxes[i];
         std::vector<ArrowPtr> coord = coords_objects_[i];
 
         Ogre::SceneNode* scene_node = coords_nodes_[i];
@@ -402,8 +407,9 @@ protected:
         Ogre::Quaternion orientation;
         if(!this->context_->getFrameManager()->getTransform(
             box.header, position, orientation)) {
-          ROS_DEBUG("Error transforming from frame '%s' to frame '%s'",
-                    box.header.frame_id.c_str(), qPrintable(this->fixed_frame_));
+          RVIZ_COMMON_LOG_DEBUG_STREAM(
+            "Error transforming from frame '" << box.header.frame_id
+            << "' to frame '" << qPrintable(this->fixed_frame_) << "'");
           return;
         }
         scene_node->setPosition(position);

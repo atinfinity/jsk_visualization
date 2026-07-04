@@ -34,6 +34,10 @@
 
 #include "torus_array_display.h"
 #include <jsk_topic_tools/color_utils.h>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/properties/status_property.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
 
 #define PI 3.14159265
 
@@ -41,22 +45,22 @@ namespace jsk_rviz_plugins
 {
   TorusArrayDisplay::TorusArrayDisplay()
   {
-    color_property_ = new rviz::ColorProperty("color", QColor(25, 255, 0),
+    color_property_ = new rviz_common::properties::ColorProperty("color", QColor(25, 255, 0),
                                               "color to draw the toruses",
                                               this, SLOT(updateColor()));
-    alpha_property_ = new rviz::FloatProperty("alpha", 0.8,
+    alpha_property_ = new rviz_common::properties::FloatProperty("alpha", 0.8,
                                               "alpha value to draw the toruses",
                                               this, SLOT(updateAlpha()));
-    uv_property_ = new rviz::IntProperty("uv-smooth", 50,
+    uv_property_ = new rviz_common::properties::IntProperty("uv-smooth", 50,
                                             "torus uv dimension setting",
                                             this, SLOT(updateUVdimension()));
-    auto_color_property_ = new rviz::BoolProperty("auto color", false,
+    auto_color_property_ = new rviz_common::properties::BoolProperty("auto color", false,
                                                   "change the color of the toruses automatically",
                                                   this, SLOT(updateAutoColor()));
-    show_normal_property_ = new rviz::BoolProperty("show normal", true,
+    show_normal_property_ = new rviz_common::properties::BoolProperty("show normal", true,
                                                    "show normal direction",
                                                    this, SLOT(updateShowNormal()));
-    normal_length_property_ = new rviz::FloatProperty("normal length", 0.1,
+    normal_length_property_ = new rviz_common::properties::FloatProperty("normal length", 0.1,
                                                       "normal length",
                                                       this, SLOT(updateNormalLength()));
 
@@ -76,7 +80,7 @@ namespace jsk_rviz_plugins
   QColor TorusArrayDisplay::getColor(size_t index)
   {
     if (auto_color_) {
-      std_msgs::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
+      std_msgs::msg::ColorRGBA ros_color = jsk_topic_tools::colorCategory20(index);
       return QColor(ros_color.r * 255.0, ros_color.g * 255.0, ros_color.b * 255.0,
                     ros_color.a * 255.0);
     }
@@ -130,7 +134,7 @@ namespace jsk_rviz_plugins
   {
      if (num > shapes_.size()) {
       for (size_t i = shapes_.size(); i < num; i++) {
-        ShapePtr shape (new rviz::MeshShape(context_->getSceneManager()));
+        ShapePtr shape (new rviz_rendering::MeshShape(context_->getSceneManager()));
         shapes_.push_back(shape);
       }
     }
@@ -142,7 +146,7 @@ namespace jsk_rviz_plugins
     if (num > arrow_objects_.size()) {
       for (size_t i = arrow_objects_.size(); i < num; i++) {
         Ogre::SceneNode* scene_node = scene_node_->createChildSceneNode();
-        ArrowPtr arrow (new rviz::Arrow(scene_manager_, scene_node));
+        ArrowPtr arrow (new rviz_rendering::Arrow(scene_manager_, scene_node));
         arrow_objects_.push_back(arrow);
         arrow_nodes_.push_back(scene_node);
       }
@@ -156,7 +160,7 @@ namespace jsk_rviz_plugins
     }
   }
 
-  void TorusArrayDisplay::allocateShapes(const jsk_recognition_msgs::TorusArray::ConstPtr& msg)
+  void TorusArrayDisplay::allocateShapes(const jsk_recognition_msgs::msg::TorusArray::ConstSharedPtr& msg)
   {
     size_t num = 0;
     for (size_t i = 0; i < msg->toruses.size(); i++) {
@@ -249,11 +253,11 @@ namespace jsk_rviz_plugins
   }
 
 
-  void TorusArrayDisplay::processMessage(const jsk_recognition_msgs::TorusArray::ConstPtr& msg)
+  void TorusArrayDisplay::processMessage(jsk_recognition_msgs::msg::TorusArray::ConstSharedPtr msg)
   {
     allocateShapes(msg);
     for (size_t i = 0; i < msg->toruses.size(); i++) {
-      jsk_recognition_msgs::Torus torus = msg->toruses[i];
+      jsk_recognition_msgs::msg::Torus torus = msg->toruses[i];
       if (torus.failure) {
         continue;
       }
@@ -272,8 +276,8 @@ namespace jsk_rviz_plugins
           oss << "Error transforming pose";
           oss << " from frame '" << torus.header.frame_id << "'";
           oss << " to frame '" << qPrintable(fixed_frame_) << "'";
-          ROS_ERROR_STREAM(oss.str());
-          setStatus(rviz::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
+          RVIZ_COMMON_LOG_ERROR_STREAM(oss.str());
+          setStatus(rviz_common::properties::StatusProperty::Error, "Transform", QString::fromStdString(oss.str()));
           return;
       }
 
@@ -318,5 +322,5 @@ namespace jsk_rviz_plugins
 }
 
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::TorusArrayDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::TorusArrayDisplay, rviz_common::Display )

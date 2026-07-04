@@ -1,9 +1,9 @@
-#include <OGRE/OgreVector3.h>
-#include <OGRE/OgreSceneNode.h>
-#include <OGRE/OgreSceneManager.h>
+#include <OgreVector3.h>
+#include <OgreSceneNode.h>
+#include <OgreSceneManager.h>
 
-#include <rviz/ogre_helpers/billboard_line.h>
-#include <rviz/ogre_helpers/axes.h>
+#include <rviz_rendering/objects/billboard_line.hpp>
+#include <rviz_rendering/objects/axes.hpp>
 
 #include "ambient_sound_visual.h"
 
@@ -30,8 +30,8 @@ namespace jsk_rviz_plugins
 
         // We create the arrow object within the frame node so that we can
         // set its position and direction relative to its header frame.
-        ambient_sound_power_line_ = new rviz::BillboardLine( scene_manager_, frame_node_ );
-        //axes_ = new rviz::Axes( scene_manager_ , frame_node_);
+        ambient_sound_power_line_ = new rviz_rendering::BillboardLine( scene_manager_, frame_node_ );
+        //axes_ = new rviz_rendering::Axes( scene_manager_ , frame_node_);
     }/*}}}*/
 
     AmbientSoundVisual::~AmbientSoundVisual()/*{{{*/
@@ -44,7 +44,7 @@ namespace jsk_rviz_plugins
         scene_manager_->destroySceneNode( frame_node_ );
     }/*}}}*/
 
-    void AmbientSoundVisual::setMessage( const jsk_hark_msgs::HarkPower::ConstPtr& msg )/*{{{*/
+    void AmbientSoundVisual::setMessage( jsk_hark_msgs::msg::HarkPower::ConstSharedPtr msg )/*{{{*/
     {
         int directions = msg->directions;
         std::vector<float> powers = msg->powers;

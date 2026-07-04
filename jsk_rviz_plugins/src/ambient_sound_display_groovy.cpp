@@ -1,17 +1,14 @@
-#include <OGRE/OgreSceneNode.h>
-#include <OGRE/OgreSceneManager.h>
+#include <OgreSceneNode.h>
+#include <OgreSceneManager.h>
 
-#include <tf/transform_listener.h>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/properties/color_property.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/int_property.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/validate_floats.hpp>
 
-#include <rviz/visualization_manager.h>
-#include <rviz/properties/color_property.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/properties/int_property.h>
-#include <rviz/properties/ros_topic_property.h>
-#include <rviz/frame_manager.h>
-#include <rviz/validate_floats.h>
-
-#include <boost/foreach.hpp>
 #include "ambient_sound_visual.h"
 #include "ambient_sound_display_groovy.h"
 
@@ -20,25 +17,25 @@ namespace jsk_rviz_plugins
 
     AmbientSoundDisplay::AmbientSoundDisplay()/*{{{*/
     {
-          color_property_ = new rviz::ColorProperty("Color",QColor( 204, 51, 204),
+          color_property_ = new rviz_common::properties::ColorProperty("Color",QColor( 204, 51, 204),
                   "Color to draw the acceleration arrows." ,
                   this, SLOT(updateColorAndAlpha()));
-          alpha_property_ = new rviz::FloatProperty( "Alpha", 1.0,
+          alpha_property_ = new rviz_common::properties::FloatProperty( "Alpha", 1.0,
                   "0 is fully transparent, 1.0 is fully opaque.",
                   this, SLOT( updateColorAndAlpha() ));
-          history_length_property_ = new rviz::IntProperty("History Length", 1,
+          history_length_property_ = new rviz_common::properties::IntProperty("History Length", 1,
                   "Number of prior measurements to display." ,
                   this, SLOT(updateHistoryLength()));
-          width_property_ = new rviz::FloatProperty("Width", 0.1,
+          width_property_ = new rviz_common::properties::FloatProperty("Width", 0.1,
                   "Width of line",
                   this, SLOT(updateAppearance()));
-          scale_property_ = new rviz::FloatProperty("Scale", 1.0,
+          scale_property_ = new rviz_common::properties::FloatProperty("Scale", 1.0,
                   "Scale of line",
                   this, SLOT(updateAppearance()));
-          bias_property_ = new rviz::FloatProperty("Bias", 10,
+          bias_property_ = new rviz_common::properties::FloatProperty("Bias", 10,
                   "Bias",
                   this, SLOT(updateAppearance()));
-          grad_property_ = new rviz::FloatProperty("Gradient", 0.1,
+          grad_property_ = new rviz_common::properties::FloatProperty("Gradient", 0.1,
                   "Gradient",
                   this, SLOT(updateAppearance()));
           history_length_property_->setMin( 1 );
@@ -144,14 +141,14 @@ namespace jsk_rviz_plugins
         visuals_.rset_capacity(history_length_property_->getInt());
     }/*}}}*/
 
-    bool AmbientSoundDisplay::validateFloats( const jsk_hark_msgs::HarkPower& msg )
+    bool AmbientSoundDisplay::validateFloats( const jsk_hark_msgs::msg::HarkPower& msg )
     {
         std::vector<float>::const_iterator it = msg.powers.begin();
         for (; it < msg.powers.end(); ++it) {
-            if(!rviz::validateFloats(*it)){
+            if(!rviz_common::validateFloats(*it)){
                 return false;
             };
-        }        
+        }
         return true;
     }
 
@@ -210,35 +207,31 @@ namespace jsk_rviz_plugins
     //}[>}}}<]
 
     // This is our callback to handle an incoming message.
-    void AmbientSoundDisplay::processMessage( const jsk_hark_msgs::HarkPower::ConstPtr& msg )/*{{{*/
+    void AmbientSoundDisplay::processMessage( jsk_hark_msgs::msg::HarkPower::ConstSharedPtr msg )/*{{{*/
     {
         if( !validateFloats( *msg ))
         {
-            setStatus( rviz::StatusProperty::Error, "Topic", "Message contained invalid floating point values (nans or infs)" );
+            setStatus( rviz_common::properties::StatusProperty::Error, "Topic", "Message contained invalid floating point values (nans or infs)" );
             return;
         }
 
-        // Here we call the rviz::FrameManager to get the transform from the
+        // Here we call the FrameManager to get the transform from the
         // fixed frame to the frame in the header of this Imu message.  If
         // it fails, we can't do anything else so we return.
         Ogre::Quaternion orientation;
         Ogre::Vector3 position;
-        if( !context_->getFrameManager()->getTransform( msg->header.frame_id,
-                    msg->header.stamp,
+        if( !context_->getFrameManager()->getTransform( msg->header,
                     position, orientation ))
         {
-            ROS_DEBUG( "Error transforming from frame '%s' to frame '%s'",
-                    msg->header.frame_id.c_str(), qPrintable( fixed_frame_ ));
+            RVIZ_COMMON_LOG_DEBUG_STREAM( "Error transforming from frame '"
+                    << msg->header.frame_id << "' to frame '"
+                    << qPrintable( fixed_frame_ ) << "'" );
             return;
         }
 
         // We are keeping a circular buffer of visual pointers.  This gets
         // the next one, or creates and stores it if it was missing.
-#if ROS_VERSION_MINIMUM(1,12,0)
         std::shared_ptr<AmbientSoundVisual> visual;
-#else
-        boost::shared_ptr<AmbientSoundVisual> visual;
-#endif
         //AmbientSoundVisual* visual_ptr;
         if( visuals_.full())
         {
@@ -275,6 +268,6 @@ namespace jsk_rviz_plugins
 
 // Tell pluginlib about this class.  It is important to do this in
 // global scope, outside our package's namespace.
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::AmbientSoundDisplay, rviz::Display )
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS( jsk_rviz_plugins::AmbientSoundDisplay, rviz_common::Display )
 
