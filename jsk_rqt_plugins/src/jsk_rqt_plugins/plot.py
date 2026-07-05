@@ -77,6 +77,10 @@ class MatDataPlot3D(QWidget):
 
             self.figure.tight_layout()
             self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            # a zero-area canvas gives the figure a zero aspect ratio,
+            # which makes every subsequent draw (including matplotlib's
+            # own idle repaints, which we cannot guard) raise ValueError
+            self.setMinimumSize(64, 64)
             self.updateGeometry()
 
         def resizeEvent(self, event):
@@ -188,11 +192,6 @@ class MatDataPlot3D(QWidget):
             # ymin -= .05 * delta
             # ymax += .05 * delta
 
-        if self._autoscroll and ymin is not None:
-            self._canvas.axes.set_xbound(lower=xmin, upper=xmax)
-            self._canvas.axes.set_zbound(lower=ymin, upper=ymax)
-            self._canvas.axes.set_ybound(lower=0,
-                                         upper=len(self._curves.keys()))
         # create poly object
         verts = []
         colors = []
@@ -213,6 +212,14 @@ class MatDataPlot3D(QWidget):
         self._canvas.axes.cla()
         self._canvas.axes.add_collection3d(poly,
                                            zs=range(line_num), zdir='y')
+        # bounds must be set AFTER cla(), which resets them to (0, 1)
+        # (the ROS 1 code set them before cla(); current matplotlib
+        # actually applies the reset, leaving autoscroll dead)
+        if self._autoscroll and ymin is not None:
+            self._canvas.axes.set_xbound(lower=xmin, upper=xmax)
+            self._canvas.axes.set_zbound(lower=ymin, upper=ymax)
+            self._canvas.axes.set_ybound(lower=0,
+                                         upper=len(self._curves.keys()))
         self._update_legend()
         self._canvas.draw()
 
@@ -333,9 +340,33 @@ class Plot3DWidget(QWidget):
         self._update_plot_timer = QTimer(self)
         self._update_plot_timer.timeout.connect(self.update_plot)
         if self._initial_topics:
-            for topic_name in self._initial_topics:
+            # Right after node creation the ROS graph may not be
+            # discovered yet, so resolving the topic types of topics
+            # passed on the command line can fail (in ROS 1 the master
+            # always knew them). Poll until each topic appears.
+            self._initial_topic_deadline = time.time() + 30.0
+            self._initial_topic_timer = QTimer(self)
+            self._initial_topic_timer.timeout.connect(
+                self._add_initial_topics)
+            self._initial_topic_timer.start(500)
+
+    def _add_initial_topics(self):
+        names = [n for n, _ in self._node.get_topic_names_and_types()]
+        remaining = []
+        for topic_name in self._initial_topics:
+            if any(topic_name == n or
+                   topic_name.startswith(n + '/') for n in names):
                 self.add_topic(topic_name)
-            self._initial_topics = None
+            else:
+                remaining.append(topic_name)
+        self._initial_topics = remaining
+        if not remaining:
+            self._initial_topic_timer.stop()
+        elif time.time() > self._initial_topic_deadline:
+            self._initial_topic_timer.stop()
+            self._node.get_logger().warn(
+                'initial topics %s did not appear within 30s; '
+                'subscribe via the GUI' % remaining)
 
     @Slot('QDragEnterEvent*')
     def dragEnterEvent(self, event):
@@ -418,7 +449,15 @@ class Plot3DWidget(QWidget):
                     qWarning(
                         'PlotWidget.update_plot(): error in rosplot: %s' % e)
             if needs_redraw:
-                self.data_plot.redraw()
+                try:
+                    self.data_plot.redraw()
+                except Exception as e:
+                    # a zero-area canvas (e.g. a not-yet-resized window)
+                    # makes the mpl 3D aspect computation raise; an
+                    # exception escaping this Qt slot would abort the
+                    # process, so skip the frame instead
+                    qWarning(
+                        'PlotWidget.update_plot(): redraw failed: %s' % e)
 
     def _subscribed_topics_changed(self):
         self._update_remove_topic_menu()

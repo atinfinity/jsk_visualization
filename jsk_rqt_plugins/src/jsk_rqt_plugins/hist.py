@@ -105,10 +105,31 @@ class HistogramPlotWidget(QWidget):
         self._rosdata = None
         self.pub_image = None
         if len(topics) != 0:
-            self.subscribe_topic(topics)
+            # Right after node creation the ROS graph may not be
+            # discovered yet, so resolving the topic type of a topic
+            # passed on the command line can fail (in ROS 1 the master
+            # always knew it). Poll until the topic appears.
+            self._initial_topic = topics
+            self._initial_topic_deadline = time.time() + 30.0
+            self._initial_topic_timer = QTimer(self)
+            self._initial_topic_timer.timeout.connect(
+                self._subscribe_initial_topic)
+            self._initial_topic_timer.start(500)
         self._update_plot_timer = QTimer(self)
         self._update_plot_timer.timeout.connect(self.update_plot)
         self._update_plot_timer.start(self._redraw_interval)
+
+    def _subscribe_initial_topic(self):
+        names = [n for n, _ in self._node.get_topic_names_and_types()]
+        if any(self._initial_topic == n or
+               self._initial_topic.startswith(n + '/') for n in names):
+            self._initial_topic_timer.stop()
+            self.subscribe_topic(self._initial_topic)
+        elif time.time() > self._initial_topic_deadline:
+            self._initial_topic_timer.stop()
+            self._node.get_logger().warn(
+                'initial topic %s did not appear within 30s; '
+                'subscribe via the GUI' % self._initial_topic)
 
     @Slot('QDropEvent*')
     def dropEvent(self, event):
@@ -202,12 +223,19 @@ class HistogramPlotWidget(QWidget):
         self.data_plot._canvas.draw()
         if self.pub_image is None:
             return
-        buffer = StringIO()
-        self.data_plot._canvas.figure.savefig(buffer, format="png")
-        buffer.seek(0)
-        img_array = np.asarray(bytearray(buffer.read()), dtype=np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-        self.pub_image.publish(self.cv_bridge.cv2_to_imgmsg(img, "bgr8"))
+        try:
+            # read the Agg buffer that draw() above just rendered;
+            # savefig() on a live Qt canvas races expose/resize events
+            # (PIL "tile cannot extend outside image") and an exception
+            # escaping this Qt slot would abort the process
+            buf = np.asarray(self.data_plot._canvas.buffer_rgba(),
+                             dtype=np.uint8)
+            img = cv2.cvtColor(buf, cv2.COLOR_RGBA2BGR)
+            self.pub_image.publish(
+                self.cv_bridge.cv2_to_imgmsg(img, "bgr8"))
+        except Exception as e:
+            self._node.get_logger().debug(
+                'skipped histogram_image frame: %s' % e)
 
 
 class MatHistogramPlot(QWidget):
