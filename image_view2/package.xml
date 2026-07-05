@@ -4,11 +4,17 @@
   <name>image_view2</name>
   <version>3.0.0</version>
   <description>
-    Stopgap ROS 2 port of the image_view2 messages used by
-    jsk_rqt_plugins. The MouseEvent definition is identical to the ROS 1
-    package (https://github.com/jsk-ros-pkg/jsk_common). Only the message
-    is provided; the image_view2 node itself is not ported. Remove this
-    package once an official ROS 2 release of image_view2 exists.
+    ROS 2 port of image_view2: a simple image viewer with draw-on
+    features. The image_view2 node subscribes to an image and overlays
+    ImageMarker2 markers (2D and 3D via camera_info + tf2), republishes
+    the marked image, and supports mouse interaction (rectangle / series
+    / line / poly / grabcut selection) driving screenpoint / rectangle /
+    line / poly / mask topics and mode services, plus an optional
+    calibration grid. The points_rectangle_extractor node extracts a
+    rectangular region of an organized point cloud from a screenrectangle
+    / screenpoint. Interfaces (MouseEvent, ImageMarker2, PointArrayStamped,
+    ChangeMode) match the ROS 1 package
+    (https://github.com/jsk-ros-pkg/jsk_common).
   </description>
   <maintainer email="k-okada@jsk.t.u-tokyo.ac.jp">Kei Okada</maintainer>
   <license>BSD</license>
@@ -19,8 +25,25 @@
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
 
   <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>cv_bridge</depend>
+  <depend>image_transport</depend>
+  <depend>image_geometry</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>libopencv-dev</depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <test_depend>ament_cmake_xmllint</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>image_publisher</test_depend>
 
   <member_of_group>rosidl_interface_packages</member_of_group>
 

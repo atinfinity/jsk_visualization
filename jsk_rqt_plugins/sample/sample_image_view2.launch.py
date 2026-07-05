@@ -18,14 +18,18 @@ def generate_launch_description():
                 ('image_raw', 'pub_sample_image/image_raw'),
                 ('camera_info', 'pub_sample_image/camera_info'),
             ]),
-        # NOTE: the ROS 1 version of this sample also launched the
-        # image_view2 C++ node (use_window: false), which draws markers on
-        # the incoming image and republishes it as <image>/marked while
-        # listening to the <image>/event topic published by this rqt
-        # plugin. image_view2 is not ported to ROS 2 yet (only its
-        # messages exist as a stopgap), so the marked-image round trip
-        # (image -> image_view2 -> rqt_image_view2) is unavailable until
-        # image_view2 is ported.
+        # image_view2 node (Phase 1 port): draws markers on the incoming
+        # image and republishes it as <image>/marked, which rqt_image_view2
+        # displays. Runs headless (use_window:=false); the rqt plugin is the
+        # GUI. The <image>/event topic carries mouse events back from rqt.
+        Node(
+            package='image_view2',
+            executable='image_view2',
+            name='image_view2',
+            parameters=[{'use_window': False}],
+            remappings=[
+                ('image', 'pub_sample_image/image_raw'),
+            ]),
         Node(
             package='jsk_rqt_plugins',
             executable='rqt_image_view2',
