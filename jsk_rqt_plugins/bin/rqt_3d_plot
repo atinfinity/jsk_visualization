@@ -1,13 +1,23 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
 import sys
 
+import rclpy
 from rqt_gui.main import Main
-try:
-    from jsk_rqt_plugins.plot import Plot3D
-except:
-    import roslib; roslib.load_manifest('jsk_rqt_plugins')
-    from jsk_rqt_plugins.plot import Plot3D
 
-plugin = 'Plot3D'
-main = Main(filename=plugin)
-sys.exit(main.main(standalone=plugin, plugin_argument_provider=Plot3D.add_arguments))
+from jsk_rqt_plugins.plot import Plot3D
+
+
+def main():
+    # Initialize rclpy with the full command line so that ROS arguments
+    # (parameters / remappings passed by ros2 launch) reach the node
+    # created by rqt_gui.
+    rclpy.init(args=sys.argv)
+    plugin = 'jsk_rqt_plugins.plot.Plot3D'
+    main = Main(filename=plugin)
+    sys.exit(main.main(
+        standalone=plugin, plugin_argument_provider=Plot3D.add_arguments))
+
+
+if __name__ == '__main__':
+    main()

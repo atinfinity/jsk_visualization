@@ -1,3 +1,5 @@
+from glob import glob
+
 from setuptools import setup
 
 package_name = 'jsk_rqt_plugins'
@@ -21,7 +23,10 @@ setup(
             'resource/service_button_layout.yaml',
             'resource/service_radio_button_layout.yaml',
         ]),
-        ('lib/' + package_name, [
+        ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
+        ('share/' + package_name + '/sample',
+         glob('sample/*.launch.py') + ['sample/kiva_pod_image_color.jpg']),
+        ('lib/' + package_name, glob('sample_scripts/*.py') + [
             'bin/rqt_2d_plot',
             'bin/rqt_3d_plot',
             'bin/rqt_drc_mini_maxwell',

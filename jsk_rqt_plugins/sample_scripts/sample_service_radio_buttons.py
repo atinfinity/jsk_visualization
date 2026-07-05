@@ -1,29 +1,42 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import rospy
-
+import rclpy
+from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
 from std_srvs.srv import Empty
-from std_srvs.srv import EmptyResponse
 
 
-class SampleServiceRadioButtons(object):
+class SampleServiceRadioButtons(Node):
     def __init__(self):
-        self.services = [
-            rospy.Service('dummy/buttonA', Empty, self._empty_cb),
-            rospy.Service('dummy/buttonB', Empty, self._empty_cb),
-            rospy.Service('dummy/buttonC', Empty, self._empty_cb),
-            rospy.Service('dummy/buttonD', Empty, self._empty_cb),
-            rospy.Service('dummy/buttonE', Empty, self._empty_cb),
-            rospy.Service('dummy/buttonF', Empty, self._empty_cb),
+        super(SampleServiceRadioButtons, self).__init__(
+            'sample_service_radio_buttons')
+        self._services = [
+            self.create_service(Empty, 'dummy/buttonA', self._empty_cb),
+            self.create_service(Empty, 'dummy/buttonB', self._empty_cb),
+            self.create_service(Empty, 'dummy/buttonC', self._empty_cb),
+            self.create_service(Empty, 'dummy/buttonD', self._empty_cb),
+            self.create_service(Empty, 'dummy/buttonE', self._empty_cb),
+            self.create_service(Empty, 'dummy/buttonF', self._empty_cb),
         ]
-        self._name = rospy.get_name()
+        self._name = self.get_name()
 
-    def _empty_cb(self, req):
-        rospy.loginfo('{} | Empty service called'.format(self._name))
-        return EmptyResponse()
+    def _empty_cb(self, req, res):
+        self.get_logger().info(
+            '{} | Empty service called'.format(self._name))
+        return res
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SampleServiceRadioButtons()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':
-    rospy.init_node('sample_service_radio_buttons')
-    sample = SampleServiceRadioButtons()
-    rospy.spin()
+    main()
