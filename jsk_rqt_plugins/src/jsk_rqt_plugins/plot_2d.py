@@ -340,7 +340,12 @@ class MatPlot2D(QWidget):
 
         def resizeEvent(self, event):
             super(MatPlot2D.Canvas, self).resizeEvent(event)
-            self.figure.tight_layout()
+            try:
+                self.figure.tight_layout()
+            except Exception:
+                # tight_layout raises LinAlgError on degenerate
+                # (zero-area) canvases, e.g. under a WM-less Xvfb
+                pass
 
     def __init__(self, parent=None):
         super(MatPlot2D, self).__init__(parent)

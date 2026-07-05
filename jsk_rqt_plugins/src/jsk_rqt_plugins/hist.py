@@ -216,7 +216,12 @@ class MatHistogramPlot(QWidget):
 
         def resizeEvent(self, event):
             super(MatHistogramPlot.Canvas, self).resizeEvent(event)
-            self.figure.tight_layout()
+            try:
+                self.figure.tight_layout()
+            except Exception:
+                # tight_layout raises LinAlgError on degenerate
+                # (zero-area) canvases, e.g. under a WM-less Xvfb
+                pass
 
     def __init__(self, parent=None):
         super(MatHistogramPlot, self).__init__(parent)

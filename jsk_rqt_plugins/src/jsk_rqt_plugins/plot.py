@@ -81,7 +81,12 @@ class MatDataPlot3D(QWidget):
 
         def resizeEvent(self, event):
             super(MatDataPlot3D.Canvas, self).resizeEvent(event)
-            self.figure.tight_layout()
+            try:
+                self.figure.tight_layout()
+            except Exception:
+                # tight_layout raises LinAlgError on degenerate
+                # (zero-area) canvases, e.g. under a WM-less Xvfb
+                pass
 
     _colors = [QColor(c) for c in [
         Qt.red, Qt.blue, Qt.magenta, Qt.cyan, Qt.green, Qt.darkYellow,
