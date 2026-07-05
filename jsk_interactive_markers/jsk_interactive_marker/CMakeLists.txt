@@ -109,9 +109,32 @@ install(TARGETS jsk_interactive_marker_rviz_plugins
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 
+# Group (c): simple markers
+im_add_executable(point_cloud_config_marker src/point_cloud_config_marker.cpp)
+im_add_executable(triangle_foot src/triangle_foot.cpp)
+im_add_executable(door_foot src/door_foot.cpp)
+im_add_executable(polygon_marker src/polygon_marker.cpp)
+
+# world2yaml: plain CLI (no ROS node)
+add_executable(world2yaml src/world2yaml.cpp)
+target_link_libraries(world2yaml PRIVATE tinyxml2::tinyxml2 yaml-cpp::yaml-cpp)
+install(TARGETS world2yaml DESTINATION lib/${PROJECT_NAME})
+
+# Group (d): point clouds
+find_package(PCL REQUIRED COMPONENTS common io filters)
+im_add_executable(interactive_point_cloud src/interactive_point_cloud.cpp)
+target_link_libraries(interactive_point_cloud PRIVATE
+  transformable_core
+  pcl_ros::pcl_ros_tf message_filters::message_filters ${PCL_LIBRARIES})
+target_include_directories(interactive_point_cloud PRIVATE
+  ${pcl_conversions_INCLUDE_DIRS})
+im_add_executable(pointcloud_cropper src/pointcloud_cropper.cpp)
+target_link_libraries(pointcloud_cropper PRIVATE
+  pcl_ros::pcl_ros_tf message_filters::message_filters ${PCL_LIBRARIES})
+target_include_directories(pointcloud_cropper PRIVATE
+  ${pcl_conversions_INCLUDE_DIRS})
+
 # --- ported group by group ---
-# Group (c): point_cloud_config_marker triangle_foot door_foot polygon_marker world2yaml
-# Group (d): interactive_point_cloud pointcloud_cropper
 # Group (e): urdf_model_marker urdf_control_marker interactive_marker_interface camera_info_publisher
 # Group (f): footstep_marker
 

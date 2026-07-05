@@ -1,18 +1,19 @@
 #include <iostream>
-#include <interactive_markers/tools.h>
+#include <interactive_markers/tools.hpp>
 #include <jsk_interactive_marker/door_foot.h>
 #include <jsk_interactive_marker/interactive_marker_utils.h>
 
 using namespace std;
+using std::placeholders::_1;
 
 
-visualization_msgs::Marker DoorFoot::makeRWallMarker(){
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CUBE;
+visualization_msgs::msg::Marker DoorFoot::makeRWallMarker(){
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = 0.05;
   marker.scale.y = 0.7;
   marker.scale.z = 2.0;
-  
+
   marker.pose.position.y = - marker.scale.y / 2;
   marker.pose.position.z = marker.scale.z / 2;
   marker.pose.orientation.w = 1.0;
@@ -25,13 +26,13 @@ visualization_msgs::Marker DoorFoot::makeRWallMarker(){
   return marker;
 }
 
-visualization_msgs::Marker DoorFoot::makeLWallMarker(){
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CUBE;
+visualization_msgs::msg::Marker DoorFoot::makeLWallMarker(){
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = 0.05;
   marker.scale.y = 0.7;
   marker.scale.z = 2.0;
-  
+
   marker.pose.position.y = 0.914 + marker.scale.y / 2;
   marker.pose.position.z = marker.scale.z / 2;
   marker.pose.orientation.w = 1.0;
@@ -45,13 +46,13 @@ visualization_msgs::Marker DoorFoot::makeLWallMarker(){
 }
 
 
-visualization_msgs::Marker DoorFoot::makeDoorMarker(){
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CUBE;
+visualization_msgs::msg::Marker DoorFoot::makeDoorMarker(){
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = 0.05;
   marker.scale.y = 0.914;
   marker.scale.z = 2.0;
-  
+
   marker.pose.position.y = marker.scale.y / 2;
   marker.pose.position.z = marker.scale.z / 2;
   marker.pose.orientation.w = 1.0;
@@ -64,13 +65,13 @@ visualization_msgs::Marker DoorFoot::makeDoorMarker(){
   return marker;
 }
 
-visualization_msgs::Marker DoorFoot::makeKnobMarker(){
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CUBE;
+visualization_msgs::msg::Marker DoorFoot::makeKnobMarker(){
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = 0.03;
   marker.scale.y = 0.1;
   marker.scale.z = 0.03;
-  
+
   marker.pose.position.x = -0.05;
   marker.pose.position.y = 0.914 - 0.1 - marker.scale.y/2 ;
   marker.pose.position.z = 0.9398;//37 in
@@ -84,19 +85,19 @@ visualization_msgs::Marker DoorFoot::makeKnobMarker(){
   return marker;
 }
 
-visualization_msgs::Marker DoorFoot::makeKnobMarker(int position){
+visualization_msgs::msg::Marker DoorFoot::makeKnobMarker(int position){
   double size = 0.02;
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CUBE;
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   marker.scale.x = 0.02;
   marker.scale.y = size;
   marker.scale.z = 0.03;
-  
+
   marker.pose.position.x = -0.07;
   marker.pose.position.y = 0.914 - marker.scale.y/2 - position * size;
   marker.pose.position.z = 0.9398;//37 in
   marker.pose.orientation.w = 1.0;
-  
+
   switch(position % 5){
   case 0:
     marker.color.r = 1.0;
@@ -130,8 +131,8 @@ visualization_msgs::Marker DoorFoot::makeKnobMarker(int position){
 }
 
 
-visualization_msgs::Marker DoorFoot::makeRFootMarker(){
-  geometry_msgs::Pose pose;
+visualization_msgs::msg::Marker DoorFoot::makeRFootMarker(){
+  geometry_msgs::msg::Pose pose;
   if(push){
     //Right Foot Position
     pose.position.x = -0.523;
@@ -150,8 +151,8 @@ visualization_msgs::Marker DoorFoot::makeRFootMarker(){
 
   return makeFootMarker(pose, true);
 }
-visualization_msgs::Marker DoorFoot::makeLFootMarker(){
-  geometry_msgs::Pose pose;
+visualization_msgs::msg::Marker DoorFoot::makeLFootMarker(){
+  geometry_msgs::msg::Pose pose;
   if(push){
     pose.position.x = -0.747;
     pose.position.y = 0.310;
@@ -171,9 +172,9 @@ visualization_msgs::Marker DoorFoot::makeLFootMarker(){
 }
 
 
-visualization_msgs::Marker DoorFoot::makeFootMarker(geometry_msgs::Pose pose, bool right){
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::CUBE;
+visualization_msgs::msg::Marker DoorFoot::makeFootMarker(geometry_msgs::msg::Pose pose, bool right){
+  visualization_msgs::msg::Marker marker;
+  marker.type = visualization_msgs::msg::Marker::CUBE;
   double PADDING_PARAM = 0.01;
   marker.scale.x = 0.27 + PADDING_PARAM;
   marker.scale.y = 0.14 + PADDING_PARAM;
@@ -196,15 +197,15 @@ visualization_msgs::Marker DoorFoot::makeFootMarker(geometry_msgs::Pose pose, bo
 }
 
 
-visualization_msgs::InteractiveMarker DoorFoot::makeInteractiveMarker(){
-  visualization_msgs::InteractiveMarker mk;
-  mk.header.frame_id = "/map";
-  mk.header.stamp = ros::Time(0);
+visualization_msgs::msg::InteractiveMarker DoorFoot::makeInteractiveMarker(){
+  visualization_msgs::msg::InteractiveMarker mk;
+  mk.header.frame_id = "map";
+  mk.header.stamp = rclcpp::Time(0);
   mk.name = marker_name;
   mk.scale = 0.3;
   mk.pose = door_pose;
 
-  visualization_msgs::InteractiveMarkerControl triangleMarker;
+  visualization_msgs::msg::InteractiveMarkerControl triangleMarker;
   triangleMarker.always_visible = true;
   triangleMarker.markers.push_back( makeRWallMarker());
   triangleMarker.markers.push_back( makeLWallMarker());
@@ -219,7 +220,7 @@ visualization_msgs::InteractiveMarker DoorFoot::makeInteractiveMarker(){
   }
 
   if (footstep_show_initial_p_) {
-    for(size_t i=0; i<2; i++){
+    for(size_t i=0; i<2 && i<foot_list.size(); i++){
       if(foot_list[i].header.frame_id == "right"){
         triangleMarker.markers.push_back( makeFootMarker( foot_list[i].pose, true ));
       }else{
@@ -230,35 +231,37 @@ visualization_msgs::InteractiveMarker DoorFoot::makeInteractiveMarker(){
   else {
     int first_index = footstep_index_ * 2;
     int second_index = footstep_index_ * 2 + 1;
-    if (foot_list.size() > first_index) {
+    if ((int)foot_list.size() > first_index) {
       triangleMarker.markers.push_back( makeFootMarker( foot_list[first_index].pose,
                                                         foot_list[first_index].header.frame_id == "right"));
     }
-    if (foot_list.size() > second_index) {
+    if ((int)foot_list.size() > second_index) {
       triangleMarker.markers.push_back( makeFootMarker( foot_list[second_index].pose,
                                                         foot_list[second_index].header.frame_id == "right"));
     }
   }
-  
-  
+
+
 
   mk.controls.push_back( triangleMarker );
-  
+
   im_helpers::add6DofControl(mk, true);
   return mk;
 }
 
-void DoorFoot::moveBoxCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback)
+void DoorFoot::moveBoxCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback)
 {
   door_pose = feedback->pose;
   //  std::cout << "moved" << std::endl;
 }
 
-void DoorFoot::showStandLocationCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+void DoorFoot::showStandLocationCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback){
+  (void)feedback;
   footstep_show_initial_p_ = true;
   updateBoxInteractiveMarker();
 }
-void DoorFoot::showNextStepCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+void DoorFoot::showNextStepCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback){
+  (void)feedback;
   if (foot_list.size() > 2) {
     if (footstep_show_initial_p_) {
       footstep_index_ = 1;
@@ -266,14 +269,15 @@ void DoorFoot::showNextStepCb( const visualization_msgs::InteractiveMarkerFeedba
     }
     else {
       ++footstep_index_;
-      if (foot_list.size() / 2 == footstep_index_) {
+      if ((int)(foot_list.size() / 2) == footstep_index_) {
 	footstep_index_ = 1;
       }
     }
   }
   updateBoxInteractiveMarker();
 }
-void DoorFoot::showPreviousStepCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+void DoorFoot::showPreviousStepCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback){
+  (void)feedback;
   if (foot_list.size() > 2) {
     if (footstep_show_initial_p_) {
       footstep_index_ = 1;
@@ -289,12 +293,14 @@ void DoorFoot::showPreviousStepCb( const visualization_msgs::InteractiveMarkerFe
   updateBoxInteractiveMarker();
 }
 
-void DoorFoot::pushDoorCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+void DoorFoot::pushDoorCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback){
+  (void)feedback;
   push = true;
   updateBoxInteractiveMarker();
 }
 
-void DoorFoot::pullDoorCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+void DoorFoot::pullDoorCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback){
+  (void)feedback;
   push = false;
   updateBoxInteractiveMarker();
 }
@@ -302,48 +308,59 @@ void DoorFoot::pullDoorCb( const visualization_msgs::InteractiveMarkerFeedbackCo
 
 interactive_markers::MenuHandler DoorFoot::makeMenuHandler(){
   interactive_markers::MenuHandler mh;
-  mh.insert("Push Door", boost::bind( &DoorFoot::pushDoorCb, this, _1));
-  mh.insert("Pull Door", boost::bind( &DoorFoot::pullDoorCb, this, _1));
-  mh.insert("Show Initial Stand Location", boost::bind( &DoorFoot::showStandLocationCb, this, _1));
-  mh.insert("Show Next Step", boost::bind( &DoorFoot::showNextStepCb, this, _1));
-  mh.insert("Show Previous Step", boost::bind( &DoorFoot::showPreviousStepCb, this, _1));
+  mh.insert("Push Door", std::bind( &DoorFoot::pushDoorCb, this, _1));
+  mh.insert("Pull Door", std::bind( &DoorFoot::pullDoorCb, this, _1));
+  mh.insert("Show Initial Stand Location", std::bind( &DoorFoot::showStandLocationCb, this, _1));
+  mh.insert("Show Next Step", std::bind( &DoorFoot::showNextStepCb, this, _1));
+  mh.insert("Show Previous Step", std::bind( &DoorFoot::showPreviousStepCb, this, _1));
   return mh;
 }
 
 
 void DoorFoot::updateBoxInteractiveMarker(){
-  visualization_msgs::InteractiveMarker boxIM = makeInteractiveMarker();
+  visualization_msgs::msg::InteractiveMarker boxIM = makeInteractiveMarker();
 
   server_->insert(boxIM,
-		  boost::bind( &DoorFoot::moveBoxCb, this, _1 ));
+		  std::bind( &DoorFoot::moveBoxCb, this, _1 ));
   menu_handler.apply(*server_, marker_name);
   server_->applyChanges();
 }
 
-DoorFoot::DoorFoot () : nh_(), pnh_("~") {
+DoorFoot::DoorFoot () : rclcpp::Node("door_foot_marker") {
   footstep_show_initial_p_ = true;
   footstep_index_ = -1;
-  pnh_.param("server_name", server_name, std::string ("") );
-  pnh_.param("size", size_, 1.0 );
-  pnh_.param("marker_name", marker_name, std::string ("door_marker") );
-  pnh_.param("push", push, true);
-  pnh_.param("use_color_knob", use_color_knob, true);
+  server_name = this->declare_parameter("server_name", std::string (""));
+  size_ = this->declare_parameter("size", 1.0);
+  marker_name = this->declare_parameter("marker_name", std::string ("door_marker"));
+  push = this->declare_parameter("push", true);
+  use_color_knob = this->declare_parameter("use_color_knob", true);
 
-  XmlRpc::XmlRpcValue v;
-  pnh_.param("foot_list", v, v);
-  for(int i=0; i< v.size(); i++){
-    XmlRpc::XmlRpcValue foot = v[i];
-    geometry_msgs::Pose p = getPose(foot["pose"]);
-    geometry_msgs::PoseStamped footPose;
-    footPose.pose = p;
-    footPose.header.frame_id.assign(foot["leg"]);
-    foot_list.push_back(footPose);
+  // In ROS 1 foot_list was a structured (XmlRpc) parameter. In ROS 2 it is
+  // passed as a YAML string, e.g.
+  //   foot_list: "[{leg: right, pose: {position: {x: 0.0, y: 0.0, z: 0.0},
+  //                 orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}]"
+  std::string foot_list_yaml = this->declare_parameter("foot_list", std::string(""));
+  if (!foot_list_yaml.empty()) {
+    try {
+      YAML::Node v = YAML::Load(foot_list_yaml);
+      for(size_t i=0; i< v.size(); i++){
+        YAML::Node foot = v[i];
+        geometry_msgs::msg::Pose p = getPose(foot["pose"]);
+        geometry_msgs::msg::PoseStamped footPose;
+        footPose.pose = p;
+        footPose.header.frame_id = foot["leg"].as<std::string>();
+        foot_list.push_back(footPose);
+      }
+    }
+    catch (const YAML::Exception& e) {
+      RCLCPP_ERROR(this->get_logger(), "failed to parse foot_list: %s", e.what());
+    }
   }
 
   if ( server_name == "" ) {
-    server_name = ros::this_node::getName();
+    server_name = this->get_name();
   }
-  server_.reset( new interactive_markers::InteractiveMarkerServer(server_name));
+  server_.reset( new interactive_markers::InteractiveMarkerServer(server_name, this));
 
   menu_handler = makeMenuHandler();
   updateBoxInteractiveMarker();
@@ -353,38 +370,37 @@ DoorFoot::DoorFoot () : nh_(), pnh_("~") {
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "door_foot_marker");
-  DoorFoot triFoot;
-  int counter = 0;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<DoorFoot>());
+  rclcpp::shutdown();
   return 0;
 }
 
 
-geometry_msgs::Pose getPose( XmlRpc::XmlRpcValue val){
-  geometry_msgs::Pose p;
-  XmlRpc::XmlRpcValue pos = val["position"];
-  p.position.x = getXmlValue(pos["x"]);
-  p.position.y = getXmlValue(pos["y"]);
-  p.position.z = getXmlValue(pos["z"]);
+geometry_msgs::msg::Pose getPose( const YAML::Node& val){
+  geometry_msgs::msg::Pose p;
+  const YAML::Node pos = val["position"];
+  p.position.x = getYamlValue(pos["x"]);
+  p.position.y = getYamlValue(pos["y"]);
+  p.position.z = getYamlValue(pos["z"]);
 
-  XmlRpc::XmlRpcValue ori = val["orientation"];
-  p.orientation.x = getXmlValue(ori["x"]);
-  p.orientation.y = getXmlValue(ori["y"]);
-  p.orientation.z = getXmlValue(ori["z"]);
-  p.orientation.w = getXmlValue(ori["w"]);
+  const YAML::Node ori = val["orientation"];
+  p.orientation.x = getYamlValue(ori["x"]);
+  p.orientation.y = getYamlValue(ori["y"]);
+  p.orientation.z = getYamlValue(ori["z"]);
+  p.orientation.w = getYamlValue(ori["w"]);
 
   return p;
 }
 
-double getXmlValue( XmlRpc::XmlRpcValue val ){
-  switch(val.getType()){
-  case XmlRpc::XmlRpcValue::TypeInt:
-    return (double)((int)val);
-  case XmlRpc::XmlRpcValue::TypeDouble:
-    return (double)val;
-  default:
+double getYamlValue( const YAML::Node& val ){
+  if (!val.IsDefined()) {
+    return 0;
+  }
+  try {
+    return val.as<double>();
+  }
+  catch (const YAML::Exception&) {
     return 0;
   }
 }
-  

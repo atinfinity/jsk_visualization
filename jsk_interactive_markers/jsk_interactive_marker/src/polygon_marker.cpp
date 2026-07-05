@@ -32,122 +32,134 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <interactive_markers/interactive_marker_server.h>
-#include <jsk_recognition_msgs/Int32Stamped.h>
-#include <jsk_interactive_marker/IndexRequest.h>
-#include <jsk_recognition_msgs/PolygonArray.h>
-#include <ros/ros.h>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <jsk_recognition_msgs/msg/int32_stamped.hpp>
+#include <jsk_interactive_marker_msgs/srv/index_request.hpp>
+#include <jsk_recognition_msgs/msg/polygon_array.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include <jsk_recognition_utils/geo/polygon.h>
-#include <jsk_topic_tools/log_utils.h>
 
-std::shared_ptr<interactive_markers::InteractiveMarkerServer> server;
-boost::mutex mutex;
-ros::Publisher pub, polygon_pub, polygon_arr_pub;
-jsk_recognition_msgs::PolygonArray::ConstPtr polygon_msg;
-
-void publishClickedPolygon(jsk_recognition_msgs::Int32Stamped& msg)
+class PolygonMarker : public rclcpp::Node
 {
-  pub.publish(msg);
-  polygon_pub.publish(polygon_msg->polygons[msg.data]);
-  jsk_recognition_msgs::PolygonArray array_msg;
-  array_msg.header = polygon_msg->header;
-  array_msg.polygons.push_back(polygon_msg->polygons[msg.data]);
-  polygon_arr_pub.publish(array_msg);
-}
-
-void processFeedback(
-  const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback)
-{
-  // control_name is "sec nsec index"
-  if (feedback->event_type == visualization_msgs::InteractiveMarkerFeedback::MOUSE_DOWN) {
-    std::string control_name = feedback->control_name;
-    ROS_INFO("control_name: %s", control_name.c_str());
-    std::list<std::string> splitted_string;
-    boost::split(splitted_string, control_name, boost::is_space());
-    jsk_recognition_msgs::Int32Stamped index;
-    index.header.stamp.sec = boost::lexical_cast<int>(splitted_string.front());
-    splitted_string.pop_front();
-    index.header.stamp.nsec = boost::lexical_cast<int>(splitted_string.front());
-    splitted_string.pop_front();
-    index.data = boost::lexical_cast<int>(splitted_string.front());
-    publishClickedPolygon(index);
+public:
+  PolygonMarker() : rclcpp::Node("polygon_interactive_marker")
+  {
+    server_.reset(new interactive_markers::InteractiveMarkerServer("polygon_interactive_marker", this));
+    pub_ = this->create_publisher<jsk_recognition_msgs::msg::Int32Stamped>("~/selected_index", 1);
+    polygon_pub_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>("~/selected_polygon", 1);
+    polygon_arr_pub_ = this->create_publisher<jsk_recognition_msgs::msg::PolygonArray>("~/selected_polygon_array", 1);
+    sub_ = this->create_subscription<jsk_recognition_msgs::msg::PolygonArray>(
+      "~/polygon_array", 1,
+      std::bind(&PolygonMarker::polygonCallback, this, std::placeholders::_1));
   }
-}
 
-// bool indexRequest(jsk_interactive_marker::IndexRequest::Request  &req,
-//                   jsk_interactive_marker::IndexRequest::Response &res)
-// {
-//   publishClickedBox(req.index);
-// }
+protected:
+  void publishClickedPolygon(jsk_recognition_msgs::msg::Int32Stamped& msg)
+  {
+    pub_->publish(msg);
+    polygon_pub_->publish(polygon_msg_->polygons[msg.data]);
+    jsk_recognition_msgs::msg::PolygonArray array_msg;
+    array_msg.header = polygon_msg_->header;
+    array_msg.polygons.push_back(polygon_msg_->polygons[msg.data]);
+    polygon_arr_pub_->publish(array_msg);
+  }
 
-void polygonCallback(const jsk_recognition_msgs::PolygonArray::ConstPtr& msg)
-{
-  polygon_msg = msg;
-  server->clear();
-  // create cube markers
-  for (size_t i = 0; i < msg->polygons.size(); i++) {
-    geometry_msgs::PolygonStamped polygon = msg->polygons[i];
-    visualization_msgs::InteractiveMarker int_marker;
-    int_marker.header.frame_id = polygon.header.frame_id;
-    int_marker.pose.orientation.w = 1;
-    {
-      std::stringstream ss;
-      ss << "polygon" << "_" << i;
-      int_marker.name = ss.str();
+  void processFeedback(visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback)
+  {
+    // control_name is "sec nsec index"
+    if (feedback->event_type == visualization_msgs::msg::InteractiveMarkerFeedback::MOUSE_DOWN) {
+      std::string control_name = feedback->control_name;
+      RCLCPP_INFO(this->get_logger(), "control_name: %s", control_name.c_str());
+      std::list<std::string> splitted_string;
+      boost::split(splitted_string, control_name, boost::is_space());
+      jsk_recognition_msgs::msg::Int32Stamped index;
+      index.header.stamp.sec = boost::lexical_cast<int>(splitted_string.front());
+      splitted_string.pop_front();
+      index.header.stamp.nanosec = boost::lexical_cast<unsigned int>(splitted_string.front());
+      splitted_string.pop_front();
+      index.data = boost::lexical_cast<int>(splitted_string.front());
+      publishClickedPolygon(index);
     }
-    visualization_msgs::InteractiveMarkerControl control;
-    control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
-    
-    {
-      std::stringstream ss;
-      // encode several informations into control name
-      ss << polygon.header.stamp.sec << " " << polygon.header.stamp.nsec << " " << i;
-      control.name = ss.str();
-    }
-    visualization_msgs::Marker marker;
-    marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
-    marker.scale.x = 1.0;
-    marker.scale.y = 1.0;
-    marker.scale.z = 1.0;
-    marker.color.r = 1.0;
-    marker.color.g = 1.0;
-    marker.color.b = 1.0;
-    marker.color.a = 0.0;
-    jsk_recognition_utils::Polygon::Ptr polygon_obj
-      = jsk_recognition_utils::Polygon::fromROSMsgPtr(polygon.polygon);
-    std::vector<jsk_recognition_utils::Polygon::Ptr> decomposed_triangles
-      = polygon_obj->decomposeToTriangles();
-    for (size_t j = 0; j < decomposed_triangles.size(); j++) {
-      jsk_recognition_utils::Vertices vs
-        = decomposed_triangles[j]->getVertices();
-      for (size_t k = 0; k < vs.size(); k++) {
-        geometry_msgs::Point p;
-        p.x = vs[k][0];
-        p.y = vs[k][1];
-        p.z = vs[k][2];
-        marker.points.push_back(p);
+  }
+
+  // bool indexRequest(jsk_interactive_marker_msgs::srv::IndexRequest::Request  &req,
+  //                   jsk_interactive_marker_msgs::srv::IndexRequest::Response &res)
+  // {
+  //   publishClickedBox(req.index);
+  // }
+
+  void polygonCallback(const jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr msg)
+  {
+    polygon_msg_ = msg;
+    server_->clear();
+    // create cube markers
+    for (size_t i = 0; i < msg->polygons.size(); i++) {
+      geometry_msgs::msg::PolygonStamped polygon = msg->polygons[i];
+      visualization_msgs::msg::InteractiveMarker int_marker;
+      int_marker.header.frame_id = polygon.header.frame_id;
+      int_marker.pose.orientation.w = 1;
+      {
+        std::stringstream ss;
+        ss << "polygon" << "_" << i;
+        int_marker.name = ss.str();
       }
+      visualization_msgs::msg::InteractiveMarkerControl control;
+      control.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
+
+      {
+        std::stringstream ss;
+        // encode several informations into control name
+        ss << polygon.header.stamp.sec << " " << polygon.header.stamp.nanosec << " " << i;
+        control.name = ss.str();
+      }
+      visualization_msgs::msg::Marker marker;
+      marker.type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
+      marker.scale.x = 1.0;
+      marker.scale.y = 1.0;
+      marker.scale.z = 1.0;
+      marker.color.r = 1.0;
+      marker.color.g = 1.0;
+      marker.color.b = 1.0;
+      marker.color.a = 0.0;
+      jsk_recognition_utils::Polygon polygon_obj
+        = jsk_recognition_utils::Polygon::fromROSMsg(polygon.polygon);
+      std::vector<jsk_recognition_utils::Polygon::Ptr> decomposed_triangles
+        = polygon_obj.decomposeToTriangles();
+      for (size_t j = 0; j < decomposed_triangles.size(); j++) {
+        jsk_recognition_utils::Vertices vs
+          = decomposed_triangles[j]->getVertices();
+        for (size_t k = 0; k < vs.size(); k++) {
+          geometry_msgs::msg::Point p;
+          p.x = vs[k][0];
+          p.y = vs[k][1];
+          p.z = vs[k][2];
+          marker.points.push_back(p);
+        }
+      }
+      control.markers.push_back(marker);
+      control.always_visible = true;
+      int_marker.controls.push_back(control);
+      server_->insert(int_marker);
+      server_->setCallback(int_marker.name,
+                           std::bind(&PolygonMarker::processFeedback, this, std::placeholders::_1));
     }
-    control.markers.push_back(marker);
-    control.always_visible = true;
-    int_marker.controls.push_back(control);
-    server->insert(int_marker);
-    server->setCallback(int_marker.name, &processFeedback);
+    server_->applyChanges();
   }
-  server->applyChanges();
-}
+
+  std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
+  rclcpp::Publisher<jsk_recognition_msgs::msg::Int32Stamped>::SharedPtr pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr polygon_pub_;
+  rclcpp::Publisher<jsk_recognition_msgs::msg::PolygonArray>::SharedPtr polygon_arr_pub_;
+  rclcpp::Subscription<jsk_recognition_msgs::msg::PolygonArray>::SharedPtr sub_;
+  jsk_recognition_msgs::msg::PolygonArray::ConstSharedPtr polygon_msg_;
+};
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "polygon_interactive_marker");
-  ros::NodeHandle n, pnh("~");
-  server.reset(new interactive_markers::InteractiveMarkerServer("polygon_interactive_marker", "", false));
-  pub = pnh.advertise<jsk_recognition_msgs::Int32Stamped>("selected_index", 1);
-  polygon_pub = pnh.advertise<geometry_msgs::PolygonStamped>("selected_polygon", 1);
-  polygon_arr_pub = pnh.advertise<jsk_recognition_msgs::PolygonArray>("selected_polygon_array", 1);
-  ros::Subscriber sub = pnh.subscribe("polygon_array", 1, polygonCallback);
-  ros::spin();
-  server.reset();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<PolygonMarker>());
+  rclcpp::shutdown();
   return 0;
 }

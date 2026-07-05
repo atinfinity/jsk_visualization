@@ -37,9 +37,8 @@
 #include "jsk_interactive_marker/interactive_marker_helpers.h"
 #include <pcl_conversions/pcl_conversions.h>
 #include <algorithm>
-#include <eigen_conversions/eigen_msg.h>
-
-#include <pcl_ros/pcl_nodelet.h>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 //using namespace jsk_interactive_marker;
 namespace jsk_interactive_marker {
@@ -69,7 +68,8 @@ namespace jsk_interactive_marker {
                       pcl::PointCloud<pcl::PointXYZ>::Ptr output)
   {
     Eigen::Vector3f transf(pose_.translation());
-    ROS_DEBUG("%s transf: %f %f %f", __FUNCTION__, transf[0], transf[1], transf[2]);
+    RCLCPP_DEBUG(rclcpp::get_logger("pointcloud_cropper"),
+                 "%s transf: %f %f %f", __FUNCTION__, transf[0], transf[1], transf[2]);
     output->points.clear();
     for (size_t i = 0; i < input->points.size(); i++) {
       pcl::PointXYZ p = input->points[i];
@@ -88,7 +88,7 @@ namespace jsk_interactive_marker {
       parameters_[index] = param;
     }
   }
-  
+
   SphereCropper::SphereCropper(): Cropper(1)
   {
     fillInitialParameters();    // not so good?
@@ -104,7 +104,8 @@ namespace jsk_interactive_marker {
     Eigen::Vector3f pos = p.getVector3fMap();
     Eigen::Vector3f origin(pose_.translation());
     double distance = (pos - origin).norm();
-    // ROS_DEBUG("pos: [%f, %f, %f], origin: [%f, %f, %f], distance: %f, R: %f",
+    // RCLCPP_DEBUG(rclcpp::get_logger("pointcloud_cropper"),
+    //          "pos: [%f, %f, %f], origin: [%f, %f, %f], distance: %f, R: %f",
     //          pos[0], pos[1], pos[2],
     //          origin[0], origin[1], origin[2],
     //          distance, getRadius());
@@ -131,10 +132,10 @@ namespace jsk_interactive_marker {
     return "SphereCropper";
   }
 
-  visualization_msgs::Marker SphereCropper::getMarker()
+  visualization_msgs::msg::Marker SphereCropper::getMarker()
   {
-    visualization_msgs::Marker marker;
-    marker.type = visualization_msgs::Marker::SPHERE;
+    visualization_msgs::msg::Marker marker;
+    marker.type = visualization_msgs::msg::Marker::SPHERE;
     marker.scale.x = getRadius() * 2;
     marker.scale.y = getRadius() * 2;
     marker.scale.z = getRadius() * 2;
@@ -160,10 +161,10 @@ namespace jsk_interactive_marker {
     return "CubeCropper";
   }
 
-  visualization_msgs::Marker CubeCropper::getMarker()
+  visualization_msgs::msg::Marker CubeCropper::getMarker()
   {
-    visualization_msgs::Marker marker;
-    marker.type = visualization_msgs::Marker::CUBE;
+    visualization_msgs::msg::Marker marker;
+    marker.type = visualization_msgs::msg::Marker::CUBE;
     marker.scale.x = getWidthX() * 2;
     marker.scale.y = getWidthY() * 2;
     marker.scale.z = getWidthZ() * 2;
@@ -209,68 +210,95 @@ namespace jsk_interactive_marker {
       return false;
     }
   }
-  
-  PointCloudCropper::PointCloudCropper(ros::NodeHandle& nh, ros::NodeHandle &pnh)
+
+  PointCloudCropper::PointCloudCropper(): rclcpp::Node("pointcloud_cropper")
   {
-    tf_listener_.reset(new tf::TransformListener);
+    tf_buffer_.reset(new tf2_ros::Buffer(this->get_clock()));
+    tf_listener_.reset(new tf2_ros::TransformListener(*tf_buffer_));
     // initialize cropper_candidates_
     cropper_candidates_.push_back(std::make_shared<SphereCropper>());
     cropper_candidates_.push_back(std::make_shared<CubeCropper>());
     cropper_ = cropper_candidates_[0];
-    point_pub_ = pnh.advertise<sensor_msgs::PointCloud2>("output", 1);
-    point_visualization_pub_ = pnh.advertise<sensor_msgs::PointCloud2>(
-      "visualization_pointcloud", 1);
+    point_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("~/output", 1);
+    point_visualization_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "~/visualization_pointcloud", 1);
     server_.reset(new interactive_markers::InteractiveMarkerServer(
-                    ros::this_node::getName()));
+                    this->get_name(), this));
     initializeInteractiveMarker();
-    srv_ = std::make_shared <dynamic_reconfigure::Server<Config> > (pnh);
-    dynamic_reconfigure::Server<Config>::CallbackType f =
-      boost::bind (&PointCloudCropper::configCallback, this, _1, _2);
-    srv_->setCallback (f);
-    point_sub_ = pnh.subscribe("input", 1, &PointCloudCropper::inputCallback, this);
+    declareCropperParameters();
+    point_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+      "~/input", 1,
+      std::bind(&PointCloudCropper::inputCallback, this, std::placeholders::_1));
   }
 
   PointCloudCropper::~PointCloudCropper()
   {
-    
+
   }
 
-  void PointCloudCropper::configCallback(Config &config, uint32_t level)
+  void PointCloudCropper::declareCropperParameters()
   {
-    boost::mutex::scoped_lock lock(mutex_);
-    for (size_t i = 0; i < cropper_candidates_.size(); i++) {
-      cropper_candidates_[i]->updateParameter(config.param0, 0);
-      cropper_candidates_[i]->updateParameter(config.param1, 1);
-      cropper_candidates_[i]->updateParameter(config.param2, 2);
+    // replacement of the dynamic_reconfigure PointCloudCropperConfig
+    for (unsigned int i = 0; i < 3; i++) {
+      rcl_interfaces::msg::ParameterDescriptor d;
+      d.description = "param[" + std::to_string(i) + "]";
+      d.floating_point_range.resize(1);
+      d.floating_point_range[0].from_value = 0.0;
+      d.floating_point_range[0].to_value = 1.0;
+      double param = this->declare_parameter("param" + std::to_string(i), 0.5, d);
+      for (size_t j = 0; j < cropper_candidates_.size(); j++) {
+        cropper_candidates_[j]->updateParameter(param, i);
+      }
     }
     reInitializeInteractiveMarker();
+    param_callback_handle_ = this->add_on_set_parameters_callback(
+      std::bind(&PointCloudCropper::parametersCallback, this, std::placeholders::_1));
   }
-  
-  void PointCloudCropper::processFeedback(
-    const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback)
+
+  rcl_interfaces::msg::SetParametersResult PointCloudCropper::parametersCallback(
+    const std::vector<rclcpp::Parameter> &parameters)
   {
-    boost::mutex::scoped_lock lock(mutex_);
-    geometry_msgs::PoseStamped input_pose_stamped, transformed_pose_stamped;
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const rclcpp::Parameter& parameter : parameters) {
+      for (unsigned int i = 0; i < 3; i++) {
+        if (parameter.get_name() == "param" + std::to_string(i)) {
+          for (size_t j = 0; j < cropper_candidates_.size(); j++) {
+            cropper_candidates_[j]->updateParameter(parameter.as_double(), i);
+          }
+        }
+      }
+    }
+    reInitializeInteractiveMarker();
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    return result;
+  }
+
+  void PointCloudCropper::processFeedback(
+    visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    geometry_msgs::msg::PoseStamped input_pose_stamped, transformed_pose_stamped;
     input_pose_stamped.pose = feedback->pose;
     input_pose_stamped.header.stamp = feedback->header.stamp;
     input_pose_stamped.header.frame_id = feedback->header.frame_id;
     if (!latest_pointcloud_) {
-      ROS_WARN("no pointcloud is available yet");
+      RCLCPP_WARN(this->get_logger(), "no pointcloud is available yet");
       return;
     }
     // 1. update cropper's pose according to the posigoin of the process feedback
     try {
-      tf_listener_->transformPose(
-        latest_pointcloud_->header.frame_id,
+      tf_buffer_->transform(
         input_pose_stamped,
-        transformed_pose_stamped);
+        transformed_pose_stamped,
+        latest_pointcloud_->header.frame_id);
     }
     catch (...) {
-      ROS_FATAL("tf exception");
+      RCLCPP_FATAL(this->get_logger(), "tf exception");
       return;
     }
     Eigen::Affine3d pose_d;
-    tf::poseMsgToEigen(transformed_pose_stamped.pose, pose_d);
+    tf2::fromMsg(transformed_pose_stamped.pose, pose_d);
     // convert Eigen::Affine3d to Eigen::Affine3f
     Eigen::Vector3d transd(pose_d.translation());
     Eigen::Quaterniond rotated(pose_d.rotation());
@@ -278,13 +306,14 @@ namespace jsk_interactive_marker {
     Eigen::Quaternionf rotatef(rotated.w(),
                                rotated.x(), rotated.y(), rotated.z());
     Eigen::Affine3f pose_f = Eigen::Translation3f(transf) * rotatef;
-    ROS_DEBUG("transf: %f %f %f", transf[0], transf[1], transf[2]);
+    RCLCPP_DEBUG(this->get_logger(), "transf: %f %f %f", transf[0], transf[1], transf[2]);
     cropper_->setPose(pose_f);
     // 2. crop pointcloud
     cropAndPublish(point_visualization_pub_);
   }
 
-  void PointCloudCropper::cropAndPublish(ros::Publisher& pub)
+  void PointCloudCropper::cropAndPublish(
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub)
   {
     pcl::PointCloud<pcl::PointXYZ>::Ptr input
       (new pcl::PointCloud<pcl::PointXYZ>);
@@ -292,21 +321,21 @@ namespace jsk_interactive_marker {
       (new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*latest_pointcloud_, *input);
     cropper_->crop(input, output);
-    ROS_DEBUG_STREAM(output->points.size() << " points to be cropped");
-    sensor_msgs::PointCloud2 ros_output;
+    RCLCPP_DEBUG_STREAM(this->get_logger(), output->points.size() << " points to be cropped");
+    sensor_msgs::msg::PointCloud2 ros_output;
     pcl::toROSMsg(*output, ros_output);
     ros_output.header = latest_pointcloud_->header;
-    pub.publish(ros_output);
+    pub->publish(ros_output);
   }
-      
+
   void PointCloudCropper::initializeInteractiveMarker(
     Eigen::Affine3f pose_offset)
   {
-    updateInteractiveMarker();
+    updateInteractiveMarker(pose_offset);
     // menu
     menu_handler_.insert(
       "Crop",
-      boost::bind(&PointCloudCropper::menuFeedback, this, _1));
+      std::bind(&PointCloudCropper::menuFeedback, this, std::placeholders::_1));
     // submenu to change the cropper
     interactive_markers::MenuHandler::EntryHandle sub_cropper_menu_handle
       = menu_handler_.insert("Switch");
@@ -316,7 +345,7 @@ namespace jsk_interactive_marker {
       interactive_markers::MenuHandler::EntryHandle cropper_entry
         = menu_handler_.insert(
           sub_cropper_menu_handle, the_cropper->getName(),
-          boost::bind(&PointCloudCropper::changeCropperCallback, this, _1));
+          std::bind(&PointCloudCropper::changeCropperCallback, this, std::placeholders::_1));
       if (the_cropper != cropper_) {
         menu_handler_.setCheckState(
           cropper_entry,
@@ -332,7 +361,7 @@ namespace jsk_interactive_marker {
     menu_handler_.apply(*server_, "pointcloud cropper");
     server_->applyChanges();
   }
-  
+
   void PointCloudCropper::reInitializeInteractiveMarker()
   {
     if (server_) {
@@ -343,24 +372,24 @@ namespace jsk_interactive_marker {
       server_->applyChanges();
     }
   }
-  
+
   void PointCloudCropper::updateInteractiveMarker(
     Eigen::Affine3f pose_offset)
   {
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker int_marker;
     if (latest_pointcloud_) {
       int_marker.header.frame_id = latest_pointcloud_->header.frame_id;
     }
     else {
-      int_marker.header.frame_id = "/camera_link";
+      int_marker.header.frame_id = "camera_link";
     }
     int_marker.name = "pointcloud cropper";
     int_marker.description = cropper_->getName();
-    visualization_msgs::InteractiveMarkerControl control;
+    visualization_msgs::msg::InteractiveMarkerControl control;
     control.always_visible = true;
-    visualization_msgs::Marker cropper_marker = cropper_->getMarker();
+    visualization_msgs::msg::Marker cropper_marker = cropper_->getMarker();
     control.interaction_mode
-      = visualization_msgs::InteractiveMarkerControl::BUTTON;
+      = visualization_msgs::msg::InteractiveMarkerControl::BUTTON;
     control.markers.push_back(cropper_marker);
     int_marker.controls.push_back(control);
     // set the position of the cropper_marker
@@ -374,23 +403,23 @@ namespace jsk_interactive_marker {
     int_marker.pose.orientation.z = offset_rot.z();
     int_marker.pose.orientation.w = offset_rot.w();
     control.markers.push_back(cropper_marker);
-    ROS_DEBUG("pos: %f, %f, %f", int_marker.pose.position.x,
-              int_marker.pose.position.y,
-              int_marker.pose.position.z);
-    ROS_DEBUG("rot: %f.; %f, %f, %f", int_marker.pose.orientation.w,
-              int_marker.pose.orientation.x,
-              int_marker.pose.orientation.y,
-              int_marker.pose.orientation.z);
+    RCLCPP_DEBUG(this->get_logger(), "pos: %f, %f, %f", int_marker.pose.position.x,
+                 int_marker.pose.position.y,
+                 int_marker.pose.position.z);
+    RCLCPP_DEBUG(this->get_logger(), "rot: %f.; %f, %f, %f", int_marker.pose.orientation.w,
+                 int_marker.pose.orientation.x,
+                 int_marker.pose.orientation.y,
+                 int_marker.pose.orientation.z);
 
     // add 6dof marker
     im_helpers::add6DofControl(int_marker, false);
-    
+
     server_->insert(int_marker,
-                    boost::bind(&PointCloudCropper::processFeedback, this, _1));    
+                    std::bind(&PointCloudCropper::processFeedback, this, std::placeholders::_1));
   }
 
   void PointCloudCropper::changeCropperCallback(
-    const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback )
+    const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback )
   {
     unsigned int menu_entry_id = feedback->menu_entry_id;
     EntryHandleVector::iterator it = std::find(cropper_entries_.begin(),
@@ -398,13 +427,13 @@ namespace jsk_interactive_marker {
                                                menu_entry_id);
     size_t index = std::distance(cropper_entries_.begin(), it);
     if (index >= cropper_candidates_.size()) {
-      ROS_ERROR("the index of the chosen cropper is out of the"
-                "range of candidate");
+      RCLCPP_ERROR(this->get_logger(), "the index of the chosen cropper is out of the"
+                   "range of candidate");
       return;
     }
     Cropper::Ptr next_cropper = cropper_candidates_[index];
     if (next_cropper == cropper_) {
-      ROS_DEBUG("same cropper");
+      RCLCPP_DEBUG(this->get_logger(), "same cropper");
       return;
     }
     else {
@@ -428,17 +457,17 @@ namespace jsk_interactive_marker {
       }
     }
   }
-  
+
   void PointCloudCropper::changeCropper(Cropper::Ptr next_cropper)
   {
     next_cropper->setPose(cropper_->getPose());
     cropper_ = next_cropper;
-    
+
     reInitializeInteractiveMarker();
   }
 
   void PointCloudCropper::menuFeedback(
-    const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback)
+    const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback)
   {
     unsigned int menu_entry_id = feedback->menu_entry_id;
     if (menu_entry_id == 1) {   // "Crop"
@@ -446,18 +475,18 @@ namespace jsk_interactive_marker {
     }
   }
 
-  void PointCloudCropper::inputCallback(const sensor_msgs::PointCloud2::ConstPtr& msg)
+  void PointCloudCropper::inputCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
   {
-    boost::mutex::scoped_lock lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     latest_pointcloud_ = msg;
     cropAndPublish(point_visualization_pub_);
   }
-  
+
 }
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "pointcloud_cropper");
-  ros::NodeHandle nh, pnh("~");
-  jsk_interactive_marker::PointCloudCropper cropper(nh, pnh);
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<jsk_interactive_marker::PointCloudCropper>());
+  rclcpp::shutdown();
+  return 0;
 }

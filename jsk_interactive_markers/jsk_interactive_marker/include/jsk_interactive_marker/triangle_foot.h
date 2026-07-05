@@ -1,27 +1,23 @@
-#include <ros/ros.h>
-#include <interactive_markers/interactive_marker_server.h>
+#include <rclcpp/rclcpp.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
 #include <jsk_interactive_marker/interactive_marker_helpers.h>
 
-#include <interactive_markers/menu_handler.h>
-#include <jsk_interactive_marker/SetPose.h>
-#include <jsk_interactive_marker/MarkerSetPose.h>
+#include <interactive_markers/menu_handler.hpp>
 
-class TriangleFoot{
+class TriangleFoot : public rclcpp::Node {
  public:
-  visualization_msgs::Marker makeTriangleMarker();
-  visualization_msgs::Marker makeRFootMarker();
-  visualization_msgs::Marker makeLFootMarker();
-  visualization_msgs::Marker makeFootMarker(geometry_msgs::Pose pose);
-  visualization_msgs::InteractiveMarker makeInteractiveMarker();
-  void moveBoxCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void reverseTriangleCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
+  visualization_msgs::msg::Marker makeTriangleMarker();
+  visualization_msgs::msg::Marker makeRFootMarker();
+  visualization_msgs::msg::Marker makeLFootMarker();
+  visualization_msgs::msg::Marker makeFootMarker(geometry_msgs::msg::Pose pose);
+  visualization_msgs::msg::InteractiveMarker makeInteractiveMarker();
+  void moveBoxCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void reverseTriangleCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
   void updateBoxInteractiveMarker();
   interactive_markers::MenuHandler makeMenuHandler();
 
   TriangleFoot ();
  private:
-  ros::NodeHandle nh_;
-  ros::NodeHandle pnh_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
 
   std::string server_name;

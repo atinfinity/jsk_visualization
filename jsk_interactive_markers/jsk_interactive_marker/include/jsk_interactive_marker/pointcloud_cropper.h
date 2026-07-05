@@ -39,36 +39,37 @@
 
 #define BOOST_PARAMETER_MAX_ARITY 7 // its a hack
 
-#include <jsk_topic_tools/time_accumulator.h>
+#include <rclcpp/rclcpp.hpp>
 
-#include <interactive_markers/interactive_marker_server.h>
-#include <interactive_markers/menu_handler.h>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <interactive_markers/menu_handler.hpp>
 
-#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
-#include <sensor_msgs/PointCloud2.h>
 
-#include <tf/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
-#include <dynamic_reconfigure/server.h>
-#include <jsk_interactive_marker/PointCloudCropperConfig.h>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
+
+#include <mutex>
 
 namespace jsk_interactive_marker
 {
-  
+
   class Cropper
   {
   public:
     typedef std::shared_ptr<Cropper> Ptr;
     Cropper(const unsigned int nr_parameter);
     virtual ~Cropper();
-    
+
     virtual void crop(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input,
                       pcl::PointCloud<pcl::PointXYZ>::Ptr output);
     virtual std::string getName() = 0;
-    virtual visualization_msgs::Marker getMarker() = 0;
+    virtual visualization_msgs::msg::Marker getMarker() = 0;
     virtual void updateParameter(const double val, const unsigned int index);
     // return true if the point p is inside of the cropper
     virtual bool isInside(const pcl::PointXYZ& p) = 0;
@@ -81,35 +82,35 @@ namespace jsk_interactive_marker
     // pose_ of the Cropper should be respected to the frame_id of pointcloud
     Eigen::Affine3f pose_;
   private:
-    
+
   };
 
   class SphereCropper: public Cropper
   {
   public:
     typedef std::shared_ptr<SphereCropper> Ptr;
-    
+
     SphereCropper();
     virtual ~SphereCropper();
     virtual std::string getName();
-    virtual visualization_msgs::Marker getMarker();
+    virtual visualization_msgs::msg::Marker getMarker();
     virtual bool isInside(const pcl::PointXYZ& p);
     virtual void fillInitialParameters();
     virtual double getRadius();
   protected:
   private:
-    
+
   };
 
   class CubeCropper: public Cropper
   {
   public:
     typedef std::shared_ptr<CubeCropper> Ptr;
-    
+
     CubeCropper();
     virtual ~CubeCropper();
     virtual std::string getName();
-    virtual visualization_msgs::Marker getMarker();
+    virtual visualization_msgs::msg::Marker getMarker();
     virtual bool isInside(const pcl::PointXYZ& p);
     virtual void fillInitialParameters();
     virtual double getWidthX();
@@ -117,50 +118,50 @@ namespace jsk_interactive_marker
     virtual double getWidthZ();
   protected:
   private:
-    
+
   };
 
-  
-  class PointCloudCropper
+
+  class PointCloudCropper : public rclcpp::Node
   {
   public:
-    PointCloudCropper(ros::NodeHandle& nh, ros::NodeHandle &pnh);
+    PointCloudCropper();
     virtual ~PointCloudCropper();
   protected:
-    typedef PointCloudCropperConfig Config;
-    
     typedef std::vector<interactive_markers::MenuHandler::EntryHandle>
     EntryHandleVector;
     virtual void changeCropper(Cropper::Ptr next_cropper);
-    virtual void inputCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
+    virtual void inputCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
     virtual void reInitializeInteractiveMarker();
     virtual void updateInteractiveMarker(
       Eigen::Affine3f pose_offset = Eigen::Affine3f::Identity());
     virtual void initializeInteractiveMarker(
       Eigen::Affine3f pose_offset = Eigen::Affine3f::Identity());
     virtual void processFeedback(
-      const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
+      visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback);
     virtual void menuFeedback(
-      const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
+      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
     virtual void changeCropperCallback(
-      const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
     virtual void updateMenuCheckboxStatus();
-    virtual void cropAndPublish(ros::Publisher& pub);
-    virtual void configCallback(Config &config, uint32_t level);
-    boost::mutex mutex_;
-    ros::Subscriber point_sub_;
-    ros::Publisher point_pub_;
-    ros::Publisher point_visualization_pub_;
+    virtual void cropAndPublish(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub);
+    virtual void declareCropperParameters();
+    virtual rcl_interfaces::msg::SetParametersResult parametersCallback(
+      const std::vector<rclcpp::Parameter> &parameters);
+    std::mutex mutex_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_sub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr point_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr point_visualization_pub_;
     std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
-    //pcl::PointCloud<pcl::PointXYZ>::Ptr latest_pointcloud_;
-    sensor_msgs::PointCloud2::ConstPtr latest_pointcloud_;
-    std::shared_ptr <dynamic_reconfigure::Server<Config> > srv_;
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr latest_pointcloud_;
+    OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
     interactive_markers::MenuHandler menu_handler_;
     Cropper::Ptr cropper_;
     std::vector<Cropper::Ptr> cropper_candidates_;
     EntryHandleVector cropper_entries_;
-    std::shared_ptr<tf::TransformListener> tf_listener_;
-    
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
   private:
   };
 }

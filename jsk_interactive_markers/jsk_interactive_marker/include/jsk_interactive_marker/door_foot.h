@@ -1,31 +1,31 @@
-#include <ros/ros.h>
-#include <interactive_markers/interactive_marker_server.h>
+#include <rclcpp/rclcpp.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
 #include <jsk_interactive_marker/interactive_marker_helpers.h>
 
-#include <interactive_markers/menu_handler.h>
-#include <jsk_interactive_marker/SetPose.h>
-#include <jsk_interactive_marker/MarkerSetPose.h>
+#include <interactive_markers/menu_handler.hpp>
 
-class DoorFoot{
+#include <yaml-cpp/yaml.h>
+
+class DoorFoot : public rclcpp::Node {
  public:
   void procAnimation();
-  visualization_msgs::Marker makeRWallMarker();
-  visualization_msgs::Marker makeLWallMarker();
-  visualization_msgs::Marker makeDoorMarker();
-  visualization_msgs::Marker makeKnobMarker();
-  visualization_msgs::Marker makeKnobMarker(int position);
+  visualization_msgs::msg::Marker makeRWallMarker();
+  visualization_msgs::msg::Marker makeLWallMarker();
+  visualization_msgs::msg::Marker makeDoorMarker();
+  visualization_msgs::msg::Marker makeKnobMarker();
+  visualization_msgs::msg::Marker makeKnobMarker(int position);
 
-  visualization_msgs::Marker makeRFootMarker();
-  visualization_msgs::Marker makeLFootMarker();
+  visualization_msgs::msg::Marker makeRFootMarker();
+  visualization_msgs::msg::Marker makeLFootMarker();
 
-  visualization_msgs::Marker makeFootMarker(geometry_msgs::Pose pose, bool right);
-  visualization_msgs::InteractiveMarker makeInteractiveMarker();
-  void moveBoxCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void pushDoorCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void pullDoorCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void showStandLocationCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void showNextStepCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void showPreviousStepCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
+  visualization_msgs::msg::Marker makeFootMarker(geometry_msgs::msg::Pose pose, bool right);
+  visualization_msgs::msg::InteractiveMarker makeInteractiveMarker();
+  void moveBoxCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void pushDoorCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void pullDoorCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void showStandLocationCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void showNextStepCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void showPreviousStepCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
   void updateBoxInteractiveMarker();
   interactive_markers::MenuHandler makeMenuHandler();
 
@@ -33,8 +33,6 @@ class DoorFoot{
  private:
   bool footstep_show_initial_p_;
   int footstep_index_;
-  ros::NodeHandle nh_;
-  ros::NodeHandle pnh_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
 
   std::string server_name;
@@ -44,9 +42,9 @@ class DoorFoot{
   double size_;
   bool push;
   bool use_color_knob;
-  std::vector<geometry_msgs::PoseStamped> foot_list;
-  geometry_msgs::Pose door_pose;
+  std::vector<geometry_msgs::msg::PoseStamped> foot_list;
+  geometry_msgs::msg::Pose door_pose;
 };
 
-geometry_msgs::Pose getPose( XmlRpc::XmlRpcValue val);
-double getXmlValue( XmlRpc::XmlRpcValue val );
+geometry_msgs::msg::Pose getPose( const YAML::Node& val);
+double getYamlValue( const YAML::Node& val );
