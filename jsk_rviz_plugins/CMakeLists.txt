@@ -171,9 +171,12 @@ install(PROGRAMS
   scripts/classification_result_visualizer.py
   scripts/rviz_mouse_point_to_tablet.py
   test/test_overlay_text_interface.py
+  scripts/contact_state_marker.py
   samples/bounding_box_sample.py
   samples/camera_sample.py
+  samples/contact_state_sample.py
   samples/diagnostics_sample.py
+  samples/face_detector_sample.py
   samples/footstep_sample.py
   samples/normal_sample.py
   samples/overlay_menu_sample.py
