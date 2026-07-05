@@ -49,6 +49,7 @@
   <depend>people_msgs</depend>
 
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>image_publisher</exec_depend>
   <exec_depend>diagnostic_updater</exec_depend>
   <exec_depend>tf_transformations</exec_depend>
   <exec_depend>urdfdom_py</exec_depend>
