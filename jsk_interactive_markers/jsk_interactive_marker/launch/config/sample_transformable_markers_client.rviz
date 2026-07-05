@@ -34,6 +34,8 @@ Visualization Manager:
     - Class: jsk_rviz_plugin/BoundingBoxArray
       Enabled: true
       Name: BoundingBoxArray
+      alpha: 1
+      only edge: true
       Topic:
         Depth: 5
         Durability Policy: Volatile

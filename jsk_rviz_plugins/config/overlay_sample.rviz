@@ -72,6 +72,7 @@ Visualization Manager:
     - Class: jsk_rviz_plugin/PieChart
       Enabled: true
       Name: pie chart
+      min value: -1
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -85,6 +86,7 @@ Visualization Manager:
     - Class: jsk_rviz_plugin/OverlayImage
       Enabled: true
       Name: sample image
+      keep aspect ratio: true
       Topic:
         Depth: 5
         Durability Policy: Volatile

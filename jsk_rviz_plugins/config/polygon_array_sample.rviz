@@ -25,6 +25,7 @@ Visualization Manager:
     - Class: jsk_rviz_plugin/PolygonArray
       Enabled: true
       Name: PolygonArray
+      only border: false
       Topic:
         Depth: 5
         Durability Policy: Volatile

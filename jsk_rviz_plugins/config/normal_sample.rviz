@@ -25,6 +25,7 @@ Visualization Manager:
     - Class: jsk_rviz_plugin/NormalDisplay
       Enabled: true
       Name: NormalDisplay
+      Style: DirectionColor
       Topic:
         Depth: 5
         Durability Policy: Volatile

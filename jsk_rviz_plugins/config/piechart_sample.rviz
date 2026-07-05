@@ -25,6 +25,7 @@ Visualization Manager:
     - Class: jsk_rviz_plugin/PieChart
       Enabled: true
       Name: PieChart
+      foreground color: 204; 0; 0
       Topic:
         Depth: 5
         Durability Policy: Volatile
