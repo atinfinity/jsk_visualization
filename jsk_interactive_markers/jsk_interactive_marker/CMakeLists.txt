@@ -141,8 +141,9 @@ im_add_executable(urdf_control_marker src/urdf_control_marker.cpp)
 im_add_executable(interactive_marker_interface src/interactive_marker_interface.cpp)
 im_add_executable(camera_info_publisher src/camera_info_publisher.cpp)
 
-# --- ported group by group ---
-# Group (f): footstep_marker
+# Group (f): footstep planner client
+im_add_executable(footstep_marker src/footstep_marker.cpp)
+target_link_libraries(footstep_marker PRIVATE rclcpp_action::rclcpp_action)
 
 install(TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}

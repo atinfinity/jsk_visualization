@@ -33,91 +33,96 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <ros/ros.h>
-#include <interactive_markers/interactive_marker_server.h>
+#ifndef JSK_INTERACTIVE_MARKER_FOOTSTEP_MARKER_H_
+#define JSK_INTERACTIVE_MARKER_FOOTSTEP_MARKER_H_
 
-#include <jsk_recognition_msgs/PolygonArray.h>
-#include <jsk_recognition_msgs/ModelCoefficientsArray.h>
-#include <jsk_interactive_marker/FootstepMarkerConfig.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <interactive_markers/menu_handler.hpp>
 
-#include <interactive_markers/menu_handler.h>
-#include <jsk_interactive_marker/SetPose.h>
-#include <jsk_interactive_marker/MarkerSetPose.h>
-#include <interactive_markers/menu_handler.h>
+#include <jsk_recognition_msgs/msg/simple_occupancy_grid_array.hpp>
+#include <jsk_recognition_msgs/srv/call_snap_it.hpp>
+#include <jsk_interactive_marker_msgs/msg/snap_foot_print_input.hpp>
+#include <jsk_interactive_marker_msgs/srv/snap_foot_print.hpp>
+#include <jsk_interactive_marker_msgs/srv/set_heuristic.hpp>
 
-#include <geometry_msgs/PointStamped.h>
-#include <message_filters/subscriber.h>
-#include <message_filters/time_synchronizer.h>
-#include <message_filters/synchronizer.h>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/polygon.hpp>
+#include <std_msgs/msg/u_int8.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <std_srvs/srv/empty.hpp>
 
-#include <tf/transform_listener.h>
-#include <actionlib/client/simple_action_client.h>
-#include <jsk_footstep_msgs/PlanFootstepsAction.h>
-#include <jsk_footstep_msgs/ExecFootstepsAction.h>
-#include <geometry_msgs/Polygon.h>
-#include <std_msgs/UInt8.h>
-#include <std_msgs/Empty.h>
-#include <std_srvs/Empty.h>
-#include <jsk_recognition_msgs/SimpleOccupancyGridArray.h>
-#include <dynamic_reconfigure/server.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <jsk_footstep_msgs/action/plan_footsteps.hpp>
+#include <jsk_footstep_msgs/action/exec_footsteps.hpp>
 
-class FootstepMarker {
+#include <Eigen/Geometry>
+#include <mutex>
+
+class FootstepMarker : public rclcpp::Node {
 public:
-  typedef jsk_interactive_marker::FootstepMarkerConfig Config;
   FootstepMarker();
   virtual ~FootstepMarker();
   void updateInitialFootstep();
-  typedef actionlib::SimpleActionClient<jsk_footstep_msgs::PlanFootstepsAction>
-  PlanningActionClient;
-  typedef actionlib::SimpleActionClient<jsk_footstep_msgs::ExecFootstepsAction>
-  ExecuteActionClient;
-  typedef jsk_footstep_msgs::PlanFootstepsResult PlanResult;
+  typedef jsk_footstep_msgs::action::PlanFootsteps PlanFootsteps;
+  typedef jsk_footstep_msgs::action::ExecFootsteps ExecFootsteps;
+  typedef rclcpp_action::Client<PlanFootsteps> PlanningActionClient;
+  typedef rclcpp_action::Client<ExecFootsteps> ExecuteActionClient;
+  typedef rclcpp_action::ClientGoalHandle<PlanFootsteps> PlanGoalHandle;
+  typedef rclcpp_action::ClientGoalHandle<ExecFootsteps> ExecGoalHandle;
+  typedef PlanFootsteps::Result PlanResult;
 protected:
   void initializeInteractiveMarker();
-  void processFeedbackCB(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void menuFeedbackCB(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void moveMarkerCB(const geometry_msgs::PoseStamped::ConstPtr& msg);
-  void menuCommandCB(const std_msgs::UInt8::ConstPtr& msg);
-  void executeCB(const std_msgs::Empty::ConstPtr& msg);
-  void resumeCB(const std_msgs::Empty::ConstPtr& msg);
-  void planDoneCB(const actionlib::SimpleClientGoalState &state, 
-                  const PlanResult::ConstPtr &result);
+  void processFeedbackCB(visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback);
+  void menuFeedbackCB(const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr& feedback);
+  void moveMarkerCB(const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg);
+  void menuCommandCB(const std_msgs::msg::UInt8::ConstSharedPtr msg);
+  void executeCB(const std_msgs::msg::Empty::ConstSharedPtr msg);
+  void resumeCB(const std_msgs::msg::Empty::ConstSharedPtr msg);
+  void planDoneCB(const PlanGoalHandle::WrappedResult& result);
   void processMenuFeedback(uint8_t id);
-  geometry_msgs::Polygon computePolygon(uint8_t leg);
+  geometry_msgs::msg::Polygon computePolygon(uint8_t leg);
   void snapLegs();
-  geometry_msgs::Pose computeLegTransformation(uint8_t leg);
-  geometry_msgs::Pose getFootstepPose(bool leftp);
+  // requests the transformation of the leg to the snapit service
+  // asynchronously; the leg pose is updated in the response callback.
+  void computeLegTransformation(uint8_t leg);
+  geometry_msgs::msg::Pose getFootstepPose(bool leftp);
   void changePlannerHeuristic(const std::string& heuristic);
   void callEstimateOcclusion();
   void cancelWalk();
   void planIfPossible();
   void resetLegPoses();
   void lookGround();
-  void configCallback(Config& config, uint32_t level);
-  bool forceToReplan(std_srvs::Empty::Request& req, std_srvs::Empty::Request& res);
-  boost::mutex plane_mutex_;
-  boost::mutex plan_run_mutex_;
-  std::shared_ptr<dynamic_reconfigure::Server<Config> > srv_;
+  rcl_interfaces::msg::SetParametersResult parametersCallback(
+    const std::vector<rclcpp::Parameter>& parameters);
+  void forceToReplan(const std::shared_ptr<std_srvs::srv::Empty::Request> req,
+                     std::shared_ptr<std_srvs::srv::Empty::Response> res);
+  std::mutex plane_mutex_;
+  std::mutex plan_run_mutex_;
+  std::mutex exec_mutex_;
+  OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   // projection to the planes
   bool projectMarkerToPlane();
-  
-  jsk_recognition_msgs::SimpleOccupancyGridArray::ConstPtr latest_grids_;
+
+  jsk_recognition_msgs::msg::SimpleOccupancyGridArray::ConstSharedPtr latest_grids_;
   // read a geometry_msgs/pose from the parameter specified.
   // the format of the parameter is [x, y, z, xx, yy, zz, ww].
   // where x, y and z means position and xx, yy, zz and ww means
   // orientation.
-  void readPoseParam(ros::NodeHandle& pnh, const std::string param,
-                     tf::Transform& offset);
+  void readPoseParam(const std::string& param, Eigen::Affine3d& offset);
 
   // execute footstep
   // sending action goal to footstep controller
   void executeFootstep();
   void resumeFootstep();
 
-  void projectionCallback(const geometry_msgs::PoseStamped& pose);
+  void projectionCallback(const geometry_msgs::msg::PoseStamped::ConstSharedPtr pose);
 
-  visualization_msgs::Marker makeFootstepMarker(geometry_msgs::Pose pose);
-  
+  visualization_msgs::msg::Marker makeFootstepMarker(geometry_msgs::msg::Pose pose);
+
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
   interactive_markers::MenuHandler menu_handler_;
   double foot_size_x_;
@@ -125,28 +130,34 @@ protected:
   double foot_size_z_;
   double footstep_margin_;
   std::string marker_frame_id_;
-  geometry_msgs::PoseStamped marker_pose_;
-  ros::Subscriber move_marker_sub_;
-  ros::Subscriber menu_command_sub_;
-  ros::Subscriber exec_sub_;
-  ros::Subscriber resume_sub_;
-  ros::Subscriber projection_sub_;
-  ros::Publisher project_footprint_pub_;
-  ros::Publisher snapped_pose_pub_;
-  ros::Publisher current_pose_pub_;
-  ros::Publisher footstep_pub_;
-  ros::ServiceClient snapit_client_;
-  ros::ServiceClient estimate_occlusion_client_;
-  ros::ServiceServer plan_if_possible_srv_;
-  std::shared_ptr<tf::TransformListener> tf_listener_;
-  PlanningActionClient ac_;
-  ExecuteActionClient ac_exec_;
+  geometry_msgs::msg::PoseStamped marker_pose_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr move_marker_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr menu_command_sub_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr exec_sub_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr resume_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr projection_sub_;
+  rclcpp::Publisher<jsk_interactive_marker_msgs::msg::SnapFootPrintInput>::SharedPtr project_footprint_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr snapped_pose_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_pub_;
+  rclcpp::Publisher<jsk_footstep_msgs::msg::FootstepArray>::SharedPtr footstep_pub_;
+  rclcpp::Client<jsk_recognition_msgs::srv::CallSnapIt>::SharedPtr snapit_client_;
+  rclcpp::Client<std_srvs::srv::Empty>::SharedPtr estimate_occlusion_client_;
+  rclcpp::Client<std_srvs::srv::Empty>::SharedPtr look_ground_client_;
+  rclcpp::Client<jsk_interactive_marker_msgs::srv::SetHeuristic>::SharedPtr set_heuristic_client_;
+  rclcpp::Client<jsk_interactive_marker_msgs::srv::SnapFootPrint>::SharedPtr project_footprint_client_;
+  rclcpp::Service<std_srvs::srv::Empty>::SharedPtr plan_if_possible_srv_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  PlanningActionClient::SharedPtr ac_;
+  ExecuteActionClient::SharedPtr ac_exec_;
+  rclcpp::TimerBase::SharedPtr initial_footstep_timer_;
   bool use_projection_service_;
   bool use_projection_topic_;
   bool show_6dof_control_;
   bool use_footstep_planner_;
   bool use_footstep_controller_;
   bool plan_run_;
+  bool exec_run_;
   bool use_plane_snap_;
   bool wait_snapit_server_;
   bool use_initial_footstep_tf_;
@@ -155,15 +166,17 @@ protected:
   bool lleg_first_;
   bool use_2d_;
   std::string initial_reference_frame_;
-  geometry_msgs::Pose lleg_pose_;
-  geometry_msgs::Pose rleg_pose_;
-  geometry_msgs::Pose lleg_initial_pose_;
-  geometry_msgs::Pose rleg_initial_pose_;
-  tf::Transform lleg_offset_;
-  tf::Transform rleg_offset_;
+  geometry_msgs::msg::Pose lleg_pose_;
+  geometry_msgs::msg::Pose rleg_pose_;
+  geometry_msgs::msg::Pose lleg_initial_pose_;
+  geometry_msgs::msg::Pose rleg_initial_pose_;
+  Eigen::Affine3d lleg_offset_;
+  Eigen::Affine3d rleg_offset_;
   std::string lfoot_frame_id_;
   std::string rfoot_frame_id_;
 
   // footstep plannner result
-  PlanResult::ConstPtr plan_result_;
+  PlanResult::SharedPtr plan_result_;
 };
+
+#endif // JSK_INTERACTIVE_MARKER_FOOTSTEP_MARKER_H_
