@@ -1,12 +1,52 @@
+// urdf_model_marker_main: read a models config and instantiate
+// UrdfModelMarker instances.
+//
+// In ROS 1 the configuration was passed via the structured rosparam
+// "~model_config".  In ROS 2 this is replaced by the string parameter
+// "models_config_file" which points to a YAML file with the same layout:
+//
+//   models:                             # (or a top-level sequence)
+//     - name: sample_model              # required
+//       description: "sample"          # optional
+//       scale: 1.02                     # optional, marker scale factor
+//       pose:                           # optional, initial root pose
+//         position: {x: 0.0, y: 0.0, z: 0.0}
+//         orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+//       offset:                         # optional, root offset pose
+//         position: {x: 0.0, y: 0.0, z: 0.0}
+//         orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+//       use_visible_color: false        # optional
+//       frame-id: map                   # required, parent frame of the model
+//       registration: false             # optional, sets mode to registration
+//       fixed_link: link_name           # optional, string or list of strings
+//       model: package://pkg/model.urdf # URDF file ("package://", "model://"
+//                                       # or full path)
+//       use_robot_description: false    # optional; if true the URDF is read
+//                                       # from the "robot_description" node
+//                                       # parameter instead of a file
+//       model_param: robot_description  # optional; read the URDF from this
+//                                       # node parameter
+//       robot: false                    # optional, robot mode
+//       mode: model                     # optional: model/robot/visualization/
+//                                       # registration
+//       initial_joint_state:            # optional
+//         - name: joint1
+//           position: 0.0
+//       display: true                   # optional, display marker at startup
+//
+// The URDF read from a parameter follows the rviz2/robot_state_publisher
+// convention (declare_parameter of e.g. "robot_description").
+
 #include "urdf_parser/urdf_parser.h"
 #include <iostream>
 #include <memory>
-#include <interactive_markers/tools.h>
+#include <vector>
+#include <interactive_markers/tools.hpp>
 #include <jsk_interactive_marker/urdf_model_marker.h>
 #include <jsk_interactive_marker/interactive_marker_utils.h>
 #include <jsk_interactive_marker/interactive_marker_helpers.h>
-#include <geometry_msgs/PoseArray.h>
-#include <jsk_topic_tools/log_utils.h>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <yaml-cpp/yaml.h>
 
 using namespace urdf;
 using namespace std;
@@ -14,15 +54,15 @@ using namespace im_utils;
 
 class UrdfModelSettings {
 private:
-  ros::NodeHandle pnh_;
-  ros::Subscriber display_marker_sub_;
-  XmlRpc::XmlRpcValue model_config_;
+  rclcpp::Node::SharedPtr node_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr display_marker_sub_;
+  YAML::Node model_config_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
   string model_name_;
   string model_description_;
   double scale_factor_;
-  geometry_msgs::PoseStamped pose_stamped_;
-  geometry_msgs::Pose root_offset_;
+  geometry_msgs::msg::PoseStamped pose_stamped_;
+  geometry_msgs::msg::Pose root_offset_;
   bool use_visible_color_;
   string mode_;
   string model_file_;
@@ -39,9 +79,9 @@ private:
   umm_vec umm_vec_;
 
 public:
-  void displayMarkerArrayCB(const geometry_msgs::PoseArrayConstPtr &msg) {
-    std_msgs::Header header = msg->header;
-    geometry_msgs::PoseStamped ps;
+  void displayMarkerArrayCB(const geometry_msgs::msg::PoseArray::ConstSharedPtr &msg) {
+    std_msgs::msg::Header header = msg->header;
+    geometry_msgs::msg::PoseStamped ps;
     ps.header = header;
 
     int msg_size = msg->poses.size();
@@ -67,105 +107,106 @@ public:
         umm_vec_[i]->setRootPose(ps);
       }
       for (int i = umm_vec_size; i < msg_size; i++) {
-        //geometry_msgs::PoseStamped pose = msg->poses[i];
         ps.pose = msg->poses[i];
-        umm_vec_.push_back(umm_ptr(new UrdfModelMarker(model_name_, model_description_, model_file_, header.frame_id, ps, root_offset_, scale_factor_, mode_ , robot_mode_, registration_,fixed_link_, use_robot_description_, use_visible_color_, initial_pose_map_, i, server_)));
+        umm_vec_.push_back(umm_ptr(new UrdfModelMarker(model_name_, model_description_, model_file_, header.frame_id, ps, root_offset_, scale_factor_, mode_ , robot_mode_, registration_,fixed_link_, use_robot_description_, use_visible_color_, initial_pose_map_, i, node_, server_)));
       }
     }
   }
 
   void init() {
     //name
-    model_name_.assign(model_config_["name"]);
+    model_name_ = model_config_["name"].as<std::string>();
 
     //description
     model_description_ = "";
-    if (model_config_.hasMember("description")) {
-      model_description_.assign(model_config_["description"]);
+    if (model_config_["description"]) {
+      model_description_ = model_config_["description"].as<std::string>();
     }
     //scale
     scale_factor_ = 1.02;
-    if (model_config_.hasMember("scale")) {
+    if (model_config_["scale"]) {
       scale_factor_ = getXmlValue(model_config_["scale"]);
     }
     //pose
-    if (model_config_.hasMember("pose")) {
+    if (model_config_["pose"]) {
       pose_stamped_.pose = getPose(model_config_["pose"]);
     }
     else {
-      pose_stamped_.pose = geometry_msgs::Pose();
+      pose_stamped_.pose = geometry_msgs::msg::Pose();
       pose_stamped_.pose.orientation.w = 1.0;
     }
-    pose_stamped_.header.stamp = ros::Time::now();
+    pose_stamped_.header.stamp = node_->now();
 
-    if (model_config_.hasMember("offset")) {
+    if (model_config_["offset"]) {
       root_offset_ = getPose(model_config_["offset"]);
     }
     else {
-      root_offset_ = geometry_msgs::Pose();
+      root_offset_ = geometry_msgs::msg::Pose();
       root_offset_.orientation.w = 1.0;
     }
 
     //color
     use_visible_color_ = false;
-    if (model_config_.hasMember("use_visible_color")) {
-      use_visible_color_ = model_config_["use_visible_color"];
+    if (model_config_["use_visible_color"]) {
+      use_visible_color_ = model_config_["use_visible_color"].as<bool>();
     }
-    ROS_INFO_STREAM("use_visible_color: " << use_visible_color_);
+    RCLCPP_INFO_STREAM(node_->get_logger(), "use_visible_color: " << use_visible_color_);
     //frame id
-    frame_id_.assign(model_config_["frame-id"]);
+    frame_id_ = model_config_["frame-id"].as<std::string>();
 
     //mode
     mode_ = "model";
     model_file_ = "";
     registration_ = false;
-    if (model_config_.hasMember("registration")) {
-      registration_ = model_config_["registration"];
+    if (model_config_["registration"]) {
+      registration_ = model_config_["registration"].as<bool>();
       mode_ = "registration";
     }
 
-    if (model_config_.hasMember("fixed_link")) {
-      XmlRpc::XmlRpcValue fixed_links = model_config_["fixed_link"];
-      if (fixed_links.getType() == XmlRpc::XmlRpcValue::TypeString) {
-        fixed_link_.push_back( fixed_links );
+    if (model_config_["fixed_link"]) {
+      YAML::Node fixed_links = model_config_["fixed_link"];
+      if (fixed_links.IsScalar()) {
+        fixed_link_.push_back(fixed_links.as<std::string>());
       }
-      else if (fixed_links.getType() == XmlRpc::XmlRpcValue::TypeArray) {
-        for(int i=0; i< fixed_links.size(); i++) {
-          fixed_link_.push_back(fixed_links[i]);
+      else if (fixed_links.IsSequence()) {
+        for(size_t i=0; i< fixed_links.size(); i++) {
+          fixed_link_.push_back(fixed_links[i].as<std::string>());
         }
       }
     }
 
-    if (model_config_.hasMember("model")) {
-      model_file_.assign(model_config_["model"]);
+    if (model_config_["model"]) {
+      model_file_ = model_config_["model"].as<std::string>();
     }
     use_robot_description_ = false;
-    if (model_config_.hasMember("use_robot_description")) {
-      model_file_ = "/robot_description";
-      use_robot_description_ = model_config_["use_robot_description"];
+    if (model_config_["use_robot_description"]) {
+      model_file_ = "robot_description";
+      use_robot_description_ = model_config_["use_robot_description"].as<bool>();
     }
-    if (model_config_.hasMember("model_param")) {
+    if (model_config_["model_param"]) {
       use_robot_description_ = true;
-      model_file_.assign(model_config_["model_param"]);
+      model_file_ = model_config_["model_param"].as<std::string>();
     }
+    robot_mode_ = false;
     if (model_config_["robot"]) {
-      mode_ = "robot";
+      robot_mode_ = model_config_["robot"].as<bool>();
+      if (robot_mode_) {
+        mode_ = "robot";
+      }
     }
-    if (model_config_.hasMember("mode")) {
-      mode_.assign(model_config_["mode"]);
+    if (model_config_["mode"]) {
+      mode_ = model_config_["mode"].as<std::string>();
     }
-
-    robot_mode_ = model_config_["robot"];
 
     //initial pose
-    if (model_config_.hasMember("initial_joint_state")) {
-      XmlRpc::XmlRpcValue initial_pose = model_config_["initial_joint_state"];
-      for(int i=0; i< initial_pose.size(); i++) {
-        XmlRpc::XmlRpcValue v = initial_pose[i];
+    if (model_config_["initial_joint_state"]) {
+      YAML::Node initial_pose = model_config_["initial_joint_state"];
+      for(size_t i=0; i< initial_pose.size(); i++) {
+        YAML::Node v = initial_pose[i];
         string name;
         double position;
-        if (v.hasMember("name") && v.hasMember("position")) {
-          name.assign(v["name"]);
+        if (v["name"] && v["position"]) {
+          name = v["name"].as<std::string>();
           position = getXmlValue(v["position"]);
           initial_pose_map_[name] = position;
         }
@@ -173,33 +214,29 @@ public:
     }
 
     //default display
-    if (model_config_.hasMember("display")) {
-      display_ = model_config_["display"];
+    if (model_config_["display"]) {
+      display_ = model_config_["display"].as<bool>();
     }
     else {
       display_ = true;
     }
-    ROS_INFO("Loading model config");
-    ROS_INFO("model_name: %s", model_name_.c_str());
-    ROS_INFO("model_description: %s", model_description_.c_str());
-    ROS_INFO("scale_factor: %f", scale_factor_);
-    ROS_INFO_STREAM("pose_stamped: " << pose_stamped_);
-    ROS_INFO_STREAM("root_offset: " << root_offset_);
-    ROS_INFO_STREAM("frame_id: " << frame_id_);
-    ROS_INFO_STREAM("mode: " << mode_);
-    ROS_INFO_STREAM("registration: " << registration_);
+    RCLCPP_INFO(node_->get_logger(), "Loading model config");
+    RCLCPP_INFO(node_->get_logger(), "model_name: %s", model_name_.c_str());
+    RCLCPP_INFO(node_->get_logger(), "model_description: %s", model_description_.c_str());
+    RCLCPP_INFO(node_->get_logger(), "scale_factor: %f", scale_factor_);
+    RCLCPP_INFO_STREAM(node_->get_logger(), "frame_id: " << frame_id_);
+    RCLCPP_INFO_STREAM(node_->get_logger(), "mode: " << mode_);
+    RCLCPP_INFO_STREAM(node_->get_logger(), "registration: " << registration_);
 
-
-    //ROS_INFO_STREAM("fixed_link: " << fixed_link_);
-    ROS_INFO_STREAM("model_file: " << model_file_);
-    ROS_INFO_STREAM("use_robot_description: " << use_robot_description_);
+    RCLCPP_INFO_STREAM(node_->get_logger(), "model_file: " << model_file_);
+    RCLCPP_INFO_STREAM(node_->get_logger(), "use_robot_description: " << use_robot_description_);
   }
 
   void addUrdfMarker() {
-    new UrdfModelMarker(model_name_, model_description_, model_file_, frame_id_, pose_stamped_ ,root_offset_, scale_factor_, mode_ , robot_mode_, registration_,fixed_link_, use_robot_description_, use_visible_color_,initial_pose_map_, -1, server_);
+    umm_vec_.push_back(umm_ptr(new UrdfModelMarker(model_name_, model_description_, model_file_, frame_id_, pose_stamped_ ,root_offset_, scale_factor_, mode_ , robot_mode_, registration_,fixed_link_, use_robot_description_, use_visible_color_,initial_pose_map_, -1, node_, server_)));
   }
 
-  UrdfModelSettings(XmlRpc::XmlRpcValue model,   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server) : pnh_("~") {
+  UrdfModelSettings(YAML::Node model, rclcpp::Node::SharedPtr node, std::shared_ptr<interactive_markers::InteractiveMarkerServer> server) : node_(node) {
     model_config_ = model;
     server_ = server;
     init();
@@ -207,7 +244,9 @@ public:
     if (display_) {
       addUrdfMarker();
     }
-    display_marker_sub_ = pnh_.subscribe<geometry_msgs::PoseArray> (model_name_ + "/pose_array", 1, boost::bind( &UrdfModelSettings::displayMarkerArrayCB, this, _1));
+    display_marker_sub_ = node_->create_subscription<geometry_msgs::msg::PoseArray>(
+      "~/" + model_name_ + "/pose_array", 1,
+      std::bind(&UrdfModelSettings::displayMarkerArrayCB, this, std::placeholders::_1));
   }
 };
 
@@ -215,26 +254,56 @@ public:
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "jsk_model_marker_interface");
-  ros::NodeHandle n;
-  ros::NodeHandle pnh_("~");
+  rclcpp::init(argc, argv);
+  rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("jsk_model_marker_interface");
 
-  string server_name;
-  pnh_.param("server_name", server_name, std::string ("") );
+  string server_name = node->declare_parameter("server_name", std::string(""));
   if (server_name == "") {
-    server_name = ros::this_node::getName();
+    server_name = node->get_name();
   }
 
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server;
-  server.reset( new interactive_markers::InteractiveMarkerServer(server_name, "", false) );
+  server.reset(new interactive_markers::InteractiveMarkerServer(server_name, node));
 
-  XmlRpc::XmlRpcValue v;
-  pnh_.param("model_config", v, v);
-  for (int i=0; i< v.size(); i++) {
-    new UrdfModelSettings(v[i], server);
+  std::string models_config_file =
+    node->declare_parameter("models_config_file", std::string(""));
+
+  std::vector<std::shared_ptr<UrdfModelSettings> > model_settings;
+  if (models_config_file.empty()) {
+    RCLCPP_WARN(node->get_logger(),
+                "~models_config_file is not specified; no model marker is created");
   }
-  ros::spin();
+  else {
+    try {
+      YAML::Node config = YAML::LoadFile(models_config_file);
+      YAML::Node models;
+      if (config.IsSequence()) {
+        models = config;
+      }
+      else if (config["models"]) {
+        models = config["models"];
+      }
+      else if (config["model_config"]) {  // ROS 1 rosparam layout
+        models = config["model_config"];
+      }
+      if (!models.IsDefined() || !models.IsSequence()) {
+        RCLCPP_ERROR(node->get_logger(),
+                     "%s does not contain a sequence of model configurations",
+                     models_config_file.c_str());
+      }
+      else {
+        for (size_t i = 0; i < models.size(); i++) {
+          model_settings.push_back(
+            std::make_shared<UrdfModelSettings>(models[i], node, server));
+        }
+      }
+    }
+    catch (const YAML::Exception &e) {
+      RCLCPP_ERROR(node->get_logger(), "failed to load %s: %s",
+                   models_config_file.c_str(), e.what());
+    }
+  }
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
-
-

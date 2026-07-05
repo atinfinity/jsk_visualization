@@ -134,8 +134,14 @@ target_link_libraries(pointcloud_cropper PRIVATE
 target_include_directories(pointcloud_cropper PRIVATE
   ${pcl_conversions_INCLUDE_DIRS})
 
+# Group (e): urdf / interface nodes
+im_add_executable(urdf_model_marker
+  src/urdf_model_marker.cpp src/urdf_model_marker_main.cpp)
+im_add_executable(urdf_control_marker src/urdf_control_marker.cpp)
+im_add_executable(interactive_marker_interface src/interactive_marker_interface.cpp)
+im_add_executable(camera_info_publisher src/camera_info_publisher.cpp)
+
 # --- ported group by group ---
-# Group (e): urdf_model_marker urdf_control_marker interactive_marker_interface camera_info_publisher
 # Group (f): footstep_marker
 
 install(TARGETS ${PROJECT_NAME}

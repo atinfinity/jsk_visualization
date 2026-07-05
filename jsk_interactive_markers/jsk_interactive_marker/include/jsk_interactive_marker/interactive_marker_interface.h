@@ -1,113 +1,117 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
-#include <tf/tf.h>
-//#include <tf/transform_listener.h>
-#include <tf/transform_broadcaster.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 
-#include <interactive_markers/interactive_marker_server.h>
+#include <interactive_markers/interactive_marker_server.hpp>
 
-#include <interactive_markers/menu_handler.h>
-#include <jsk_interactive_marker/SetPose.h>
-#include <jsk_interactive_marker/MarkerSetPose.h>
+#include <interactive_markers/menu_handler.hpp>
+#include <jsk_interactive_marker_msgs/srv/set_pose.hpp>
+#include <jsk_interactive_marker_msgs/srv/marker_set_pose.hpp>
 
 #include <math.h>
-#include <jsk_interactive_marker/MarkerMenu.h>
-#include <jsk_interactive_marker/MarkerPose.h>
+#include <jsk_interactive_marker_msgs/msg/marker_menu.hpp>
+#include <jsk_interactive_marker_msgs/msg/marker_pose.hpp>
 
-#include <std_msgs/Int8.h>
+#include <std_msgs/msg/int8.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include "urdf_parser/urdf_parser.h"
-#if ROS_VERSION_MINIMUM(1,12,0) // kinetic
 #include <urdf_world/types.h>
-#else
-namespace urdf {
-typedef boost::shared_ptr<ModelInterface> ModelInterfaceSharedPtr;
-}
-#endif
 
-class InteractiveMarkerInterface {
+#include <yaml-cpp/yaml.h>
+
+#include <list>
+#include <map>
+#include <mutex>
+#include <string>
+#include <vector>
+
+class InteractiveMarkerInterface : public rclcpp::Node {
  private:
   struct MeshProperty{
     std::string link_name;
     std::string mesh_file;
-    geometry_msgs::Point position;
-    geometry_msgs::Quaternion orientation;
+    geometry_msgs::msg::Point position;
+    geometry_msgs::msg::Quaternion orientation;
 
   };
 
   struct UrdfProperty{
     urdf::ModelInterfaceSharedPtr model;
     std::string root_link_name;
-    geometry_msgs::Pose pose;
+    geometry_msgs::msg::Pose pose;
     double scale;
-    std_msgs::ColorRGBA color;
+    std_msgs::msg::ColorRGBA color;
     bool use_original_color;
   };
 
  public:
-  visualization_msgs::InteractiveMarker make6DofControlMarker( std::string name, geometry_msgs::PoseStamped &stamped, float scale, bool fixed_position, bool fixed_rotation);
+  visualization_msgs::msg::InteractiveMarker make6DofControlMarker( std::string name, geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed_position, bool fixed_rotation);
 
-  void proc_feedback( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
-  void proc_feedback( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback, int type );
-  void pub_marker_tf ( std_msgs::Header header, geometry_msgs::Pose pose);
-  void pub_marker_pose ( std_msgs::Header header, geometry_msgs::Pose pose, std::string name, int type );
+  void proc_feedback( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
+  void proc_feedback( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback, int type );
+  void pub_marker_tf ( std_msgs::msg::Header header, geometry_msgs::msg::Pose pose);
+  void pub_marker_pose ( std_msgs::msg::Header header, geometry_msgs::msg::Pose pose, std::string name, int type );
 
   void pub_marker_menu(std::string marker,int menu, int type);
   void pub_marker_menu(std::string marker,int menu);
-  
-  void pub_marker_menuCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback, int menu );
 
-  void pub_marker_menuCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback, int menu, int type);
+  void pub_marker_menuCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback, int menu );
 
-  void IMSizeLargeCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void pub_marker_menuCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback, int menu, int type);
 
-  void IMSizeMiddleCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void IMSizeLargeCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void IMSizeSmallCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void IMSizeMiddleCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void changeMoveModeCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void IMSizeSmallCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void changeMoveModeCb1( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void changeMoveModeCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void changeMoveModeCb2( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void changeMoveModeCb1( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void changeForceModeCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void changeMoveModeCb2( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void changeForceModeCb1( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void changeForceModeCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void changeForceModeCb2( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void changeForceModeCb1( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  
-  void targetPointMenuCB( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void changeForceModeCb2( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void lookAutomaticallyMenuCB( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
 
-  void ConstraintCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void targetPointMenuCB( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void modeCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void lookAutomaticallyMenuCB( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
+
+  void ConstraintCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
+
+  void modeCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
   void changeMoveArm( std::string m_name, int menu );
-  
-  void setOriginCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback, bool origin_hand);
 
-  void ikmodeCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
-  void toggleIKModeCb( const std_msgs::EmptyConstPtr &msg);
-  void useTorsoCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void setOriginCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback, bool origin_hand);
 
-  void usingIKCb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void ikmodeCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
+  void toggleIKModeCb( const std_msgs::msg::Empty::ConstSharedPtr &msg);
+  void useTorsoCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void marker_menu_cb( const jsk_interactive_marker::MarkerMenuConstPtr &msg);
+  void usingIKCb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
 
-  void updateHeadGoal( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void updateBase( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
-  void updateFinger( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback, std::string hand);
+  void marker_menu_cb( const jsk_interactive_marker_msgs::msg::MarkerMenu::ConstSharedPtr msg);
 
-  visualization_msgs::InteractiveMarker makeBaseMarker( const char *name, const geometry_msgs::PoseStamped &stamped, float scale, bool fixed);
+  void updateHeadGoal( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void updateBase( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+  void updateFinger( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback, std::string hand);
+
+  visualization_msgs::msg::InteractiveMarker makeBaseMarker( const char *name, const geometry_msgs::msg::PoseStamped &stamped, float scale, bool fixed);
 
 
 
   void changeMarkerForceMode( std::string mk_name , int im_mode);
-  
-  void toggleStartIKCb( const std_msgs::EmptyConstPtr &msg);
+
+  void toggleStartIKCb( const std_msgs::msg::Empty::ConstSharedPtr &msg);
 
   void initControlMarkers(void);
 
@@ -119,56 +123,58 @@ class InteractiveMarkerInterface {
 
   void changeMarkerMoveMode( std::string mk_name , int im_mode, float mk_size);
 
-  void changeMarkerMoveMode( std::string mk_name , int im_mode, float mk_size, geometry_msgs::PoseStamped dist_pose);
+  void changeMarkerMoveMode( std::string mk_name , int im_mode, float mk_size, geometry_msgs::msg::PoseStamped dist_pose);
 
   void changeMarkerOperationModelMode( std::string mk_name );
 
-  //void addHandMarker(visualization_msgs::InteractiveMarkerControl &imc,std::vector < MeshProperty > mesh_vec, double mk_size);
-  void addHandMarker(visualization_msgs::InteractiveMarker &im,std::vector < UrdfProperty > urdf_vec);
-  void addSphereMarker(visualization_msgs::InteractiveMarker &im, double scale, std_msgs::ColorRGBA color);
-  void makeCenterSphere(visualization_msgs::InteractiveMarker &mk, double mk_size);
+  void addHandMarker(visualization_msgs::msg::InteractiveMarker &im,std::vector < UrdfProperty > urdf_vec);
+  void addSphereMarker(visualization_msgs::msg::InteractiveMarker &im, double scale, std_msgs::msg::ColorRGBA color);
+  void makeCenterSphere(visualization_msgs::msg::InteractiveMarker &mk, double mk_size);
 
   InteractiveMarkerInterface ();
 
-  bool markers_set_cb ( jsk_interactive_marker::MarkerSetPose::Request &req,
-			jsk_interactive_marker::MarkerSetPose::Response &res );
+  void markers_set_cb ( const std::shared_ptr<jsk_interactive_marker_msgs::srv::MarkerSetPose::Request> req,
+                        std::shared_ptr<jsk_interactive_marker_msgs::srv::MarkerSetPose::Response> res );
 
-  bool markers_del_cb ( jsk_interactive_marker::MarkerSetPose::Request &req,
-			jsk_interactive_marker::MarkerSetPose::Response &res );
+  void markers_del_cb ( const std::shared_ptr<jsk_interactive_marker_msgs::srv::MarkerSetPose::Request> req,
+                        std::shared_ptr<jsk_interactive_marker_msgs::srv::MarkerSetPose::Response> res );
 
-  void move_marker_cb ( const geometry_msgs::PoseStampedConstPtr &msg);
+  void move_marker_cb ( const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg);
 
-  bool set_cb ( jsk_interactive_marker::MarkerSetPose::Request &req,
-                jsk_interactive_marker::MarkerSetPose::Response &res );
+  void set_cb ( const std::shared_ptr<jsk_interactive_marker_msgs::srv::MarkerSetPose::Request> req,
+                std::shared_ptr<jsk_interactive_marker_msgs::srv::MarkerSetPose::Response> res );
 
-  bool reset_cb ( jsk_interactive_marker::SetPose::Request &req,
-                  jsk_interactive_marker::SetPose::Response &res );
+  void reset_cb ( const std::shared_ptr<jsk_interactive_marker_msgs::srv::SetPose::Request> req,
+                  std::shared_ptr<jsk_interactive_marker_msgs::srv::SetPose::Response> res );
 
-  void loadMeshFromYaml(XmlRpc::XmlRpcValue val, std::string name, std::vector<MeshProperty>& mesh);
-  void loadUrdfFromYaml(XmlRpc::XmlRpcValue val, std::string name, std::vector<UrdfProperty>& mesh);
-  void loadMeshes(XmlRpc::XmlRpcValue val);
+  void loadUrdfFromYaml(const YAML::Node &val, std::string name, std::vector<UrdfProperty>& mesh);
+  void loadMeshes(const YAML::Node &val);
 
-  void makeIMVisible(visualization_msgs::InteractiveMarker &im);
+  void makeIMVisible(visualization_msgs::msg::InteractiveMarker &im);
+
+  // dynamic_tf_publisher replacement
+  void publishDynamicTf();
 
  private:
 
-  ros::NodeHandle nh_;
-  ros::NodeHandle pnh_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
-  ros::Publisher pub_;
-  ros::Publisher pub_update_;
-  ros::Publisher pub_move_;
-  ros::ServiceServer serv_reset_;
-  ros::ServiceServer serv_set_;
-  ros::ServiceServer serv_markers_set_;
-  ros::ServiceServer serv_markers_del_;
-  ros::Subscriber sub_marker_pose_;
-  ros::Subscriber sub_marker_menu_;
-  ros::Subscriber sub_toggle_start_ik_;
-  ros::Subscriber sub_toggle_ik_mode_;
-  //tf::TransformListener tfl_;
-  tf::TransformBroadcaster tfb_;
-  ros::ServiceClient dynamic_tf_publisher_client_;
+  rclcpp::Publisher<jsk_interactive_marker_msgs::msg::MarkerPose>::SharedPtr pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_update_;
+  rclcpp::Publisher<jsk_interactive_marker_msgs::msg::MarkerMenu>::SharedPtr pub_move_;
+  rclcpp::Service<jsk_interactive_marker_msgs::srv::SetPose>::SharedPtr serv_reset_;
+  rclcpp::Service<jsk_interactive_marker_msgs::srv::MarkerSetPose>::SharedPtr serv_set_;
+  rclcpp::Service<jsk_interactive_marker_msgs::srv::MarkerSetPose>::SharedPtr serv_markers_set_;
+  rclcpp::Service<jsk_interactive_marker_msgs::srv::MarkerSetPose>::SharedPtr serv_markers_del_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_marker_pose_;
+  rclcpp::Subscription<jsk_interactive_marker_msgs::msg::MarkerMenu>::SharedPtr sub_marker_menu_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr sub_toggle_start_ik_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr sub_toggle_ik_mode_;
+
+  /* dynamic_tf_publisher replacement */
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  std::map<std::string, geometry_msgs::msg::TransformStamped> dynamic_tf_map_;
+  std::mutex dynamic_tf_mutex_;
+  rclcpp::TimerBase::SharedPtr dynamic_tf_timer_;
 
   interactive_markers::MenuHandler menu_handler;
   interactive_markers::MenuHandler menu_handler1;
@@ -218,10 +224,9 @@ class InteractiveMarkerInterface {
   int h_mode_ikmode;
   int use_arm;
 
-  
 
-  std::list<visualization_msgs::InteractiveMarker> imlist;
-  //interactive_markers::MenuHandler menu_handler;
+
+  std::list<visualization_msgs::msg::InteractiveMarker> imlist;
 
   struct GripperState{
   GripperState() : on_(false), view_facing_(false), edit_control_(false), torso_frame_(false) {}
@@ -236,21 +241,13 @@ class InteractiveMarkerInterface {
   ControlState() : posture_r_(false), posture_l_(false), torso_on_(false), head_on_(false),
       projector_on_(false), init_head_goal_(false), base_on_(true),  r_finger_on_(false), l_finger_on_(false), move_arm_(RARM), move_origin_state_(HAND_ORIGIN) {}
 
-    void print()
-    {
-      ROS_DEBUG_NAMED("control_state", "gripper: on[%d|%d][%d], edit[%d|%d][%d], torso[%d|%d]",
-                      l_gripper_.on_, r_gripper_.on_, dual_grippers_.on_, l_gripper_.edit_control_, r_gripper_.edit_control_, dual_grippers_.edit_control_, l_gripper_.torso_frame_, r_gripper_.torso_frame_);
-      ROS_DEBUG_NAMED("control_state", "posture[%d|%d] torso[%d] base[%d] head[%d] projector[%d]",
-                      posture_l_, posture_r_, torso_on_, base_on_, head_on_, projector_on_ );
-    }
-
     enum MoveArmState { RARM, LARM, ARMS};
     enum MoveOriginState { HAND_ORIGIN, DESIGNATED_ORIGIN};
 
     MoveArmState move_arm_;
     MoveOriginState move_origin_state_;
-    
-    geometry_msgs::PoseStamped marker_pose_;
+
+    geometry_msgs::msg::PoseStamped marker_pose_;
 
     bool posture_r_;
     bool posture_l_;
@@ -275,7 +272,7 @@ class InteractiveMarkerInterface {
 
   ControlState control_state_;
 
-  geometry_msgs::PoseStamped head_goal_pose_;
+  geometry_msgs::msg::PoseStamped head_goal_pose_;
 
   std::string hand_type_;
 
@@ -285,4 +282,3 @@ class InteractiveMarkerInterface {
   std::vector< UrdfProperty > rhand_urdf_, lhand_urdf_;
 
 };
-

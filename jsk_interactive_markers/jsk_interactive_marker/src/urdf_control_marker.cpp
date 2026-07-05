@@ -1,122 +1,163 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
-#include <interactive_markers/interactive_marker_server.h>
-#include <interactive_markers/menu_handler.h>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <interactive_markers/menu_handler.hpp>
 
 #include <jsk_interactive_marker/interactive_marker_utils.h>
-#include <std_msgs/Bool.h>
+#include <std_msgs/msg/bool.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 
-#include <tf/transform_broadcaster.h>
-#include <tf/transform_listener.h>
-#include <tf/tf.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
-#include <dynamic_tf_publisher/SetDynamicTF.h>
+#include <yaml-cpp/yaml.h>
+
+#include <map>
+#include <mutex>
+#include <string>
 
 using namespace visualization_msgs;
 
-class UrdfControlMarker {
+namespace {
+std::string stripSlash(const std::string &frame)
+{
+  if (!frame.empty() && frame[0] == '/') {
+    return frame.substr(1);
+  }
+  return frame;
+}
+}
+
+class UrdfControlMarker : public rclcpp::Node {
 public:
   UrdfControlMarker();
-  void processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+  void processFeedback(visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback);
   void makeControlMarker( bool fixed );
-  void set_pose_cb( const geometry_msgs::PoseStampedConstPtr &msg );
-  void show_marker_cb ( const std_msgs::BoolConstPtr &msg);
-  void markerUpdate ( std_msgs::Header header, geometry_msgs::Pose pose);
-  void publish_pose_cb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
-  void callDynamicTf(const std_msgs::Header& header,
-                     const std::string& child_frame,
-                     const geometry_msgs::Transform& pose,
-                     bool until_success = false);
+  void set_pose_cb( const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg );
+  void show_marker_cb ( const std_msgs::msg::Bool::ConstSharedPtr msg);
+  void markerUpdate ( std_msgs::msg::Header header, geometry_msgs::msg::Pose pose);
+  void publish_pose_cb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback );
+  // dynamic_tf_publisher replacement
+  void setDynamicTf(const std_msgs::msg::Header& header,
+                    const std::string& child_frame,
+                    const geometry_msgs::msg::Transform& transform);
+  void publishDynamicTf();
 private:
   bool use_dynamic_tf_, move_2d_;
-  tf::TransformListener tf_listener_;
-  ros::ServiceClient dynamic_tf_publisher_client_;
-  ros::Subscriber sub_set_pose_, sub_show_marker_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  std::map<std::string, geometry_msgs::msg::TransformStamped> dynamic_tf_map_;
+  std::mutex dynamic_tf_mutex_;
+  rclcpp::TimerBase::SharedPtr dynamic_tf_timer_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_set_pose_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_show_marker_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
-  ros::NodeHandle nh_, pnh_;
-  ros::Publisher pub_pose_, pub_selected_pose_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_pose_, pub_selected_pose_;
   std::string frame_id_, marker_frame_id_, fixed_frame_id_;
   std::string center_marker_;
-  std_msgs::ColorRGBA color_;
+  std_msgs::msg::ColorRGBA color_;
   bool mesh_use_embedded_materials_;
   double marker_scale_, center_marker_scale_;
   interactive_markers::MenuHandler marker_menu_;
-  geometry_msgs::Pose center_marker_pose_;
+  geometry_msgs::msg::Pose center_marker_pose_;
 };
 
-UrdfControlMarker::UrdfControlMarker() : nh_(), pnh_("~"){
-  server_.reset( new interactive_markers::InteractiveMarkerServer("urdf_control_marker","",false) );
+UrdfControlMarker::UrdfControlMarker() : rclcpp::Node("urdf_control_marker") {
+  server_.reset(new interactive_markers::InteractiveMarkerServer("urdf_control_marker", this));
 
-  pnh_.param("move_2d", move_2d_, false);
-  pnh_.param("use_dynamic_tf", use_dynamic_tf_, false);
-  pnh_.param<std::string>("frame_id", frame_id_, "/map");
-  pnh_.param<std::string>("fixed_frame_id", fixed_frame_id_, "/odom_on_ground");
-  pnh_.param<std::string>("marker_frame_id", marker_frame_id_, "/urdf_control_marker");
-  pnh_.param<std::string>("center_marker", center_marker_, "");
-  pnh_.param("marker_scale", marker_scale_, 1.0);
-  pnh_.param("center_marker_scale", center_marker_scale_, 1.0);
+  move_2d_ = this->declare_parameter("move_2d", false);
+  use_dynamic_tf_ = this->declare_parameter("use_dynamic_tf", false);
+  frame_id_ = stripSlash(this->declare_parameter("frame_id", std::string("map")));
+  fixed_frame_id_ = stripSlash(this->declare_parameter("fixed_frame_id", std::string("odom_on_ground")));
+  marker_frame_id_ = stripSlash(this->declare_parameter("marker_frame_id", std::string("urdf_control_marker")));
+  center_marker_ = this->declare_parameter("center_marker", std::string(""));
+  marker_scale_ = this->declare_parameter("marker_scale", 1.0);
+  center_marker_scale_ = this->declare_parameter("center_marker_scale", 1.0);
   //set color
-  if(pnh_.hasParam("center_marker_color")){
+  bool use_center_marker_color =
+    this->declare_parameter("center_marker_color", false);
+  if (use_center_marker_color) {
     mesh_use_embedded_materials_ = false;
-    std::map<std::string, double> color_map;
-    pnh_.getParam("color", color_map);
-    color_.r = color_map["r"];
-    color_.g = color_map["g"];
-    color_.b = color_map["b"];
-    color_.a = color_map["a"];
+    color_.r = this->declare_parameter("color.r", 0.0);
+    color_.g = this->declare_parameter("color.g", 0.0);
+    color_.b = this->declare_parameter("color.b", 0.0);
+    color_.a = this->declare_parameter("color.a", 0.0);
   }else{
     mesh_use_embedded_materials_ = true;
   }
 
   //set pose
-  if(pnh_.hasParam("center_marker_pose")){
-    XmlRpc::XmlRpcValue pose_v;
-    pnh_.param("center_marker_pose", pose_v, pose_v);
-    center_marker_pose_ = im_utils::getPose(pose_v);
-
-  }else{
-    center_marker_pose_.orientation.w = 1.0;
+  // center_marker_pose is passed as a YAML string, e.g.
+  //   center_marker_pose: "{position: {x: 0, y: 0, z: 0}, orientation: {x: 0, y: 0, z: 0, w: 1}}"
+  std::string center_marker_pose_yaml =
+    this->declare_parameter("center_marker_pose", std::string(""));
+  center_marker_pose_.orientation.w = 1.0;
+  if (!center_marker_pose_yaml.empty()) {
+    try {
+      YAML::Node pose_v = YAML::Load(center_marker_pose_yaml);
+      center_marker_pose_ = im_utils::getPose(pose_v);
+    }
+    catch (const YAML::Exception &e) {
+      RCLCPP_ERROR(this->get_logger(), "failed to parse ~center_marker_pose: %s", e.what());
+    }
   }
 
-  //dynamic_tf_publisher
+  tf_buffer_.reset(new tf2_ros::Buffer(this->get_clock()));
+  tf_listener_.reset(new tf2_ros::TransformListener(*tf_buffer_));
+
+  //dynamic_tf_publisher replacement: broadcast registered transforms
+  //periodically (the ROS 1 code requested freq=20 in SetDynamicTF)
   if (use_dynamic_tf_) {
-    dynamic_tf_publisher_client_ = nh_.serviceClient<dynamic_tf_publisher::SetDynamicTF>("set_dynamic_tf", true);
-    dynamic_tf_publisher_client_.waitForExistence();
+    tf_broadcaster_.reset(new tf2_ros::TransformBroadcaster(this));
+    dynamic_tf_timer_ = this->create_wall_timer(
+      std::chrono::duration<double>(1.0 / 20.0),
+      std::bind(&UrdfControlMarker::publishDynamicTf, this));
   }
-  pub_pose_ = pnh_.advertise<geometry_msgs::PoseStamped>("pose", 1);
-  pub_selected_pose_ = pnh_.advertise<geometry_msgs::PoseStamped>("selected_pose", 1);
-  sub_set_pose_ = pnh_.subscribe<geometry_msgs::PoseStamped> ("set_pose", 1, boost::bind( &UrdfControlMarker::set_pose_cb, this, _1));
-  sub_show_marker_ = pnh_.subscribe<std_msgs::Bool> ("show_marker", 1, boost::bind( &UrdfControlMarker::show_marker_cb, this, _1));
+  pub_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("~/pose", 1);
+  pub_selected_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("~/selected_pose", 1);
+  sub_set_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+    "~/set_pose", 1,
+    std::bind(&UrdfControlMarker::set_pose_cb, this, std::placeholders::_1));
+  sub_show_marker_ = this->create_subscription<std_msgs::msg::Bool>(
+    "~/show_marker", 1,
+    std::bind(&UrdfControlMarker::show_marker_cb, this, std::placeholders::_1));
 
-  marker_menu_.insert( "Publish Pose",
-		       boost::bind( &UrdfControlMarker::publish_pose_cb, this, _1) );
+  marker_menu_.insert("Publish Pose",
+                      std::bind(&UrdfControlMarker::publish_pose_cb, this, std::placeholders::_1));
 
   makeControlMarker( false );
-
-  ros::spin();
-  server_.reset();
 }
 
-void UrdfControlMarker::publish_pose_cb( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback ){
-  geometry_msgs::PoseStamped ps;
+void UrdfControlMarker::publish_pose_cb( const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback ){
+  geometry_msgs::msg::PoseStamped ps;
   ps.header = feedback->header;
   ps.pose = feedback->pose;
-  pub_selected_pose_.publish(ps);
+  pub_selected_pose_->publish(ps);
 }
 
-void UrdfControlMarker::set_pose_cb ( const geometry_msgs::PoseStampedConstPtr &msg){
+void UrdfControlMarker::set_pose_cb ( const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg){
   // Convert PoseStamped frame_id to fixed_frame_id_
-  geometry_msgs::PoseStamped in_pose(*msg);
-  geometry_msgs::PoseStamped out_pose;
-  in_pose.header.stamp = ros::Time(0.0);
-  tf_listener_.transformPose(fixed_frame_id_, in_pose, out_pose);
+  geometry_msgs::msg::PoseStamped in_pose(*msg);
+  geometry_msgs::msg::PoseStamped out_pose;
+  in_pose.header.stamp = builtin_interfaces::msg::Time();
+  in_pose.header.frame_id = stripSlash(in_pose.header.frame_id);
+  try {
+    out_pose = tf_buffer_->transform(in_pose, fixed_frame_id_);
+  }
+  catch (tf2::TransformException &ex) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to transform pose: %s", ex.what());
+    return;
+  }
   out_pose.header.stamp = msg->header.stamp;
   server_->setPose("urdf_control_marker", out_pose.pose, out_pose.header);
   server_->applyChanges();
   markerUpdate(out_pose.header, out_pose.pose);
 }
 
-void UrdfControlMarker::show_marker_cb ( const std_msgs::BoolConstPtr &msg){
+void UrdfControlMarker::show_marker_cb ( const std_msgs::msg::Bool::ConstSharedPtr msg){
   if(msg->data){
     makeControlMarker( false );
   }else{
@@ -126,55 +167,56 @@ void UrdfControlMarker::show_marker_cb ( const std_msgs::BoolConstPtr &msg){
 }
 
 
-void UrdfControlMarker::processFeedback( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback )
+void UrdfControlMarker::processFeedback( visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback )
 {
   markerUpdate( feedback->header, feedback->pose);
 }
 
-void UrdfControlMarker::callDynamicTf(
-  const std_msgs::Header& header,
+// replacement of the dynamic_tf_publisher SetDynamicTF service call:
+// register/update the transform which is broadcast by dynamic_tf_timer_.
+void UrdfControlMarker::setDynamicTf(
+  const std_msgs::msg::Header& header,
   const std::string& child_frame,
-  const geometry_msgs::Transform& transform,
-  bool until_success)
+  const geometry_msgs::msg::Transform& transform)
 {
-  dynamic_tf_publisher::SetDynamicTF SetTf;
-  SetTf.request.freq = 20;
-  SetTf.request.cur_tf.header = header;
-  SetTf.request.cur_tf.child_frame_id = child_frame;
-  SetTf.request.cur_tf.transform = transform;
-  ros::Rate r(1);
-  while (true) {
-    if (!dynamic_tf_publisher_client_.call(SetTf)) {
-      ROS_ERROR("Failed to call dynamic_tf: %s => %s",
-                header.frame_id.c_str(),
-                child_frame.c_str());
-      // Re-create connection to service server
-      dynamic_tf_publisher_client_ = nh_.serviceClient<dynamic_tf_publisher::SetDynamicTF>("set_dynamic_tf", true);
-      dynamic_tf_publisher_client_.waitForExistence();
-      if (!until_success) {
-        break;
-      }
+  geometry_msgs::msg::TransformStamped tf_stamped;
+  tf_stamped.header = header;
+  tf_stamped.header.frame_id = stripSlash(header.frame_id);
+  tf_stamped.child_frame_id = stripSlash(child_frame);
+  tf_stamped.transform = transform;
+  std::lock_guard<std::mutex> lock(dynamic_tf_mutex_);
+  dynamic_tf_map_[tf_stamped.child_frame_id] = tf_stamped;
+}
+
+void UrdfControlMarker::publishDynamicTf()
+{
+  std::vector<geometry_msgs::msg::TransformStamped> transforms;
+  {
+    std::lock_guard<std::mutex> lock(dynamic_tf_mutex_);
+    rclcpp::Time now = this->now();
+    for (auto &it : dynamic_tf_map_) {
+      it.second.header.stamp = now;
+      transforms.push_back(it.second);
     }
-    else {
-      break;
-    }
-    r.sleep();
+  }
+  if (!transforms.empty()) {
+    tf_broadcaster_->sendTransform(transforms);
   }
 }
 
-void UrdfControlMarker::markerUpdate ( std_msgs::Header header, geometry_msgs::Pose pose){
+void UrdfControlMarker::markerUpdate ( std_msgs::msg::Header header, geometry_msgs::msg::Pose pose){
   if (use_dynamic_tf_){
-    geometry_msgs::Transform transform;
+    geometry_msgs::msg::Transform transform;
     transform.translation.x = pose.position.x;
     transform.translation.y = pose.position.y;
     transform.translation.z = pose.position.z;
     transform.rotation = pose.orientation;
-    callDynamicTf(header, marker_frame_id_, transform);
+    setDynamicTf(header, marker_frame_id_, transform);
   }
-  geometry_msgs::PoseStamped ps;
+  geometry_msgs::msg::PoseStamped ps;
   ps.header = header;
   ps.pose = pose;
-  pub_pose_.publish(ps);
+  pub_pose_->publish(ps);
 }
 
 
@@ -182,7 +224,7 @@ void UrdfControlMarker::markerUpdate ( std_msgs::Header header, geometry_msgs::P
 
 void UrdfControlMarker::makeControlMarker( bool fixed )
 {
-  InteractiveMarker int_marker;
+  msg::InteractiveMarker int_marker;
   int_marker.header.frame_id = frame_id_;
   int_marker.scale = marker_scale_;
 
@@ -190,19 +232,19 @@ void UrdfControlMarker::makeControlMarker( bool fixed )
 
   //add center marker
   if(center_marker_ != ""){
-    InteractiveMarkerControl center_marker_control;
+    msg::InteractiveMarkerControl center_marker_control;
     center_marker_control.name = "center_marker";
     center_marker_control.always_visible = true;
     center_marker_control.orientation.w = 1.0;
     center_marker_control.orientation.y = 1.0;
 
     if(move_2d_){
-      center_marker_control.interaction_mode = InteractiveMarkerControl::MOVE_PLANE;
+      center_marker_control.interaction_mode = msg::InteractiveMarkerControl::MOVE_PLANE;
     }else{
-      center_marker_control.interaction_mode = InteractiveMarkerControl::MOVE_3D;
+      center_marker_control.interaction_mode = msg::InteractiveMarkerControl::MOVE_3D;
     }
-    Marker center_marker;
-    center_marker.type = Marker::MESH_RESOURCE;
+    msg::Marker center_marker;
+    center_marker.type = msg::Marker::MESH_RESOURCE;
     center_marker.scale.x = center_marker.scale.y = center_marker.scale.z = center_marker_scale_;
     center_marker.mesh_use_embedded_materials = mesh_use_embedded_materials_;
     center_marker.mesh_resource = center_marker_;
@@ -213,12 +255,12 @@ void UrdfControlMarker::makeControlMarker( bool fixed )
     int_marker.controls.push_back(center_marker_control);
   }
 
-  InteractiveMarkerControl control;
+  msg::InteractiveMarkerControl control;
 
   if ( fixed )
     {
       int_marker.name += "_fixed";
-      control.orientation_mode = InteractiveMarkerControl::FIXED;
+      control.orientation_mode = msg::InteractiveMarkerControl::FIXED;
     }
   control.always_visible = true;
 
@@ -227,12 +269,12 @@ void UrdfControlMarker::makeControlMarker( bool fixed )
   control.orientation.y = 0;
   control.orientation.z = 0;
   control.name = "rotate_x";
-  control.interaction_mode = InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = msg::InteractiveMarkerControl::ROTATE_AXIS;
   if(!move_2d_){
     int_marker.controls.push_back(control);
   }
   control.name = "move_x";
-  control.interaction_mode = InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = msg::InteractiveMarkerControl::MOVE_AXIS;
   int_marker.controls.push_back(control);
 
   control.orientation.w = 1;
@@ -240,10 +282,10 @@ void UrdfControlMarker::makeControlMarker( bool fixed )
   control.orientation.y = 1;
   control.orientation.z = 0;
   control.name = "rotate_z";
-  control.interaction_mode = InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = msg::InteractiveMarkerControl::ROTATE_AXIS;
   int_marker.controls.push_back(control);
   control.name = "move_z";
-  control.interaction_mode = InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = msg::InteractiveMarkerControl::MOVE_AXIS;
   if(!move_2d_){
     int_marker.controls.push_back(control);
   }
@@ -253,31 +295,33 @@ void UrdfControlMarker::makeControlMarker( bool fixed )
   control.orientation.y = 0;
   control.orientation.z = 1;
   control.name = "rotate_y";
-  control.interaction_mode = InteractiveMarkerControl::ROTATE_AXIS;
+  control.interaction_mode = msg::InteractiveMarkerControl::ROTATE_AXIS;
   if(!move_2d_){
     int_marker.controls.push_back(control);
   }
   control.name = "move_y";
-  control.interaction_mode = InteractiveMarkerControl::MOVE_AXIS;
+  control.interaction_mode = msg::InteractiveMarkerControl::MOVE_AXIS;
   int_marker.controls.push_back(control);
 
   server_->insert(int_marker);
-  server_->setCallback(int_marker.name, boost::bind( &UrdfControlMarker::processFeedback, this, _1));
+  server_->setCallback(int_marker.name, std::bind(&UrdfControlMarker::processFeedback, this, std::placeholders::_1));
   marker_menu_.apply(*server_, int_marker.name);
   server_->applyChanges();
   if (use_dynamic_tf_) {
     /* First initialize dynamic tf as identity */
-    std_msgs::Header header;
+    std_msgs::msg::Header header;
     header.frame_id = fixed_frame_id_;
-    header.stamp = ros::Time::now();
-    geometry_msgs::Transform transform;
+    header.stamp = this->now();
+    geometry_msgs::msg::Transform transform;
     transform.rotation.w = 1.0;
-    callDynamicTf(header, marker_frame_id_, transform, true);
+    setDynamicTf(header, marker_frame_id_, transform);
   }
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "basic_controls");
-  UrdfControlMarker ucm;
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<UrdfControlMarker>());
+  rclcpp::shutdown();
+  return 0;
 }

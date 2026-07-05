@@ -33,53 +33,59 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <ros/ros.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <interactive_markers/interactive_marker_server.h>
-#include <interactive_markers/menu_handler.h>
-#include <tf/transform_listener.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <interactive_markers/menu_handler.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "jsk_interactive_marker/interactive_marker_helpers.h"
-#include <dynamic_reconfigure/server.h>
-#include "jsk_interactive_marker/CameraInfoPublisherConfig.h"
 #include <yaml-cpp/yaml.h>
+#include <mutex>
 
 namespace jsk_interactive_marker
 {
-  class CameraInfoPublisher
+  class CameraInfoPublisher : public rclcpp::Node
   {
   public:
     typedef std::shared_ptr<CameraInfoPublisher> Ptr;
-    typedef jsk_interactive_marker::CameraInfoPublisherConfig Config;
     CameraInfoPublisher();
     virtual ~CameraInfoPublisher();
   protected:
     ////////////////////////////////////////////////////////
     // methods
     ////////////////////////////////////////////////////////
-    virtual void publishCameraInfo(const ros::Time& stamp);
+    virtual void publishCameraInfo(const rclcpp::Time& stamp);
     virtual void processFeedback(
-      const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
+      visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback);
     virtual void initializeInteractiveMarker();
     virtual void pointcloudCallback(
-      const sensor_msgs::PointCloud2::ConstPtr& msg);
+      const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
     virtual void imageCallback(
-      const sensor_msgs::Image::ConstPtr& msg);
-    virtual void staticRateCallback(
-      const ros::TimerEvent& event);
-    virtual void configCallback(Config &config, uint32_t level);
-    
+      const sensor_msgs::msg::Image::ConstSharedPtr msg);
+    virtual void staticRateCallback();
+    // replacement of the dynamic_reconfigure CameraInfoPublisherConfig
+    virtual void declareConfigParameters();
+    virtual rcl_interfaces::msg::SetParametersResult parametersCallback(
+      const std::vector<rclcpp::Parameter> &parameters);
+
     ////////////////////////////////////////////////////////
     // ROS variables
     ////////////////////////////////////////////////////////
-    ros::Publisher pub_camera_info_;
-    ros::Subscriber sub_sync_;
-    ros::Timer timer_;
-    std::shared_ptr <dynamic_reconfigure::Server<Config> > srv_;
-    boost::mutex mutex_;
+    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr pub_camera_info_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_sync_pointcloud_;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_sync_image_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+    std::mutex mutex_;
     std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
-    std::shared_ptr<tf::TransformListener> tf_listener_;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     ////////////////////////////////////////////////////////
     // variables
     ////////////////////////////////////////////////////////
@@ -90,9 +96,9 @@ namespace jsk_interactive_marker
     double f_;
     std::string yaml_filename_;
     YAML::Node camera_info_yaml_;
-    geometry_msgs::Pose latest_pose_;
-    
+    geometry_msgs::msg::Pose latest_pose_;
+
   private:
-    
+
   };
 }

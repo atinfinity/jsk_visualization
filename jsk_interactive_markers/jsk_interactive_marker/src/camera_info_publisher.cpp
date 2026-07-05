@@ -34,75 +34,69 @@
  *********************************************************************/
 
 #include "jsk_interactive_marker/camera_info_publisher.h"
-#include <sensor_msgs/distortion_models.h>
-#include <tf/transform_broadcaster.h>
+#include <sensor_msgs/distortion_models.hpp>
+#include <cstring>
 
 namespace jsk_interactive_marker
 {
   CameraInfoPublisher::CameraInfoPublisher()
+    : rclcpp::Node("camera_info_publisher")
   {
-    ros::NodeHandle nh, pnh("~");
-    
     latest_pose_.orientation.w = 1.0;
-    tf_listener_.reset(new tf::TransformListener());
-    pub_camera_info_ = pnh.advertise<sensor_msgs::CameraInfo>("camera_info", 1);
-    if (!pnh.getParam("yaml_filename", yaml_filename_)) {
-      yaml_filename_ = "";
-      ROS_WARN("~yaml_fliename is not specified, use default camera info parameters");
+    tf_buffer_.reset(new tf2_ros::Buffer(this->get_clock()));
+    tf_listener_.reset(new tf2_ros::TransformListener(*tf_buffer_));
+    tf_broadcaster_.reset(new tf2_ros::TransformBroadcaster(this));
+    pub_camera_info_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
+      "~/camera_info", 1);
+    yaml_filename_ = this->declare_parameter("yaml_filename", std::string(""));
+    if (yaml_filename_ == "") {
+      RCLCPP_WARN(this->get_logger(),
+                  "~yaml_filename is not specified, use default camera info parameters");
     }
     else {
       camera_info_yaml_ = YAML::LoadFile(yaml_filename_);
     }
 
-    // setup dynamic reconfigure
-    srv_ = std::make_shared <dynamic_reconfigure::Server<Config> > (pnh);
-    dynamic_reconfigure::Server<Config>::CallbackType f =
-      boost::bind (
-        &CameraInfoPublisher::configCallback, this, _1, _2);
-    srv_->setCallback (f);
+    // setup declared parameters (dynamic_reconfigure replacement)
+    declareConfigParameters();
 
     // read parameters
-    if (!pnh.getParam("frame_id", frame_id_)) {
-      ROS_WARN("~frame_id is not specified, use camera as frame_id");
-      frame_id_ = "camera";
-    }
-    if (!pnh.getParam("parent_frame_id", parent_frame_id_)) {
-      ROS_WARN("~parent_frame_id is not specified, use base_link as parent_frame_id");
-      parent_frame_id_ = "base_link";
-    }
+    frame_id_ = this->declare_parameter("frame_id", std::string("camera"));
+    parent_frame_id_ = this->declare_parameter("parent_frame_id",
+                                               std::string("base_link"));
 
     // interactive marker
     server_.reset(new interactive_markers::InteractiveMarkerServer(
-                    ros::this_node::getName()));
+                    this->get_name(), this));
     initializeInteractiveMarker();
-    bool sync_pointcloud;
-    bool sync_image;
-    
-    if (!pnh.getParam("sync_pointcloud", sync_pointcloud)) {
-      sync_pointcloud = false;
-    }
+    bool sync_pointcloud = this->declare_parameter("sync_pointcloud", false);
+    bool sync_image = this->declare_parameter("sync_image", false);
+
     if (sync_pointcloud) {
-      ROS_INFO("~sync_pointcloud is specified, synchronize ~camera_info to pointcloud");
-      sub_sync_ = pnh.subscribe(
-        "input", 1, &CameraInfoPublisher::pointcloudCallback, this);
+      RCLCPP_INFO(this->get_logger(),
+                  "~sync_pointcloud is specified, synchronize ~camera_info to pointcloud");
+      sub_sync_pointcloud_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+        "~/input", 1,
+        std::bind(&CameraInfoPublisher::pointcloudCallback, this,
+                  std::placeholders::_1));
     }
     else {
-      if (!pnh.getParam("sync_image", sync_image)) {
-        sync_image = false;
-      }
       if (sync_image) {
-        ROS_INFO("~sync_image is specified, synchronize ~camera_info to image");
-        sub_sync_ = pnh.subscribe(
-          "input", 1, &CameraInfoPublisher::imageCallback, this);
+        RCLCPP_INFO(this->get_logger(),
+                    "~sync_image is specified, synchronize ~camera_info to image");
+        sub_sync_image_ = this->create_subscription<sensor_msgs::msg::Image>(
+          "~/input", 1,
+          std::bind(&CameraInfoPublisher::imageCallback, this,
+                    std::placeholders::_1));
       }
       else {
-        ROS_INFO("~sync_image or ~sync_pointcloud are not specified, use static_rate");
-        double static_rate;
-        pnh.param("static_rate", static_rate, 30.0); // defaults to 30 Hz
-        timer_ = nh.createTimer(
-          ros::Duration( 1 / static_rate ),
-          boost::bind(&CameraInfoPublisher::staticRateCallback,
-                      this, _1));
+        RCLCPP_INFO(this->get_logger(),
+                    "~sync_image or ~sync_pointcloud are not specified, use static_rate");
+        double static_rate =
+          this->declare_parameter("static_rate", 30.0); // defaults to 30 Hz
+        timer_ = this->create_wall_timer(
+          std::chrono::duration<double>(1 / static_rate),
+          std::bind(&CameraInfoPublisher::staticRateCallback, this));
       }
     }
   }
@@ -111,50 +105,92 @@ namespace jsk_interactive_marker
   {
 
   }
-  
+
+  void CameraInfoPublisher::declareConfigParameters()
+  {
+    // replacement of the dynamic_reconfigure CameraInfoPublisherConfig
+    {
+      rcl_interfaces::msg::ParameterDescriptor d;
+      d.description = "width of camera info";
+      d.floating_point_range.resize(1);
+      d.floating_point_range[0].from_value = 1.0;
+      d.floating_point_range[0].to_value = 5000.0;
+      width_ = this->declare_parameter("width", 640.0, d);
+    }
+    {
+      rcl_interfaces::msg::ParameterDescriptor d;
+      d.description = "height of camera info";
+      d.floating_point_range.resize(1);
+      d.floating_point_range[0].from_value = 1.0;
+      d.floating_point_range[0].to_value = 5000.0;
+      height_ = this->declare_parameter("height", 480.0, d);
+    }
+    {
+      rcl_interfaces::msg::ParameterDescriptor d;
+      d.description = "f of camera_info, used as fx and fy";
+      d.floating_point_range.resize(1);
+      d.floating_point_range[0].from_value = 1.0;
+      d.floating_point_range[0].to_value = 5000.0;
+      f_ = this->declare_parameter("f", 525.0, d);
+    }
+    param_callback_handle_ = this->add_on_set_parameters_callback(
+      std::bind(&CameraInfoPublisher::parametersCallback, this,
+                std::placeholders::_1));
+  }
+
+  rcl_interfaces::msg::SetParametersResult CameraInfoPublisher::parametersCallback(
+    const std::vector<rclcpp::Parameter> &parameters)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const rclcpp::Parameter& parameter : parameters) {
+      if (parameter.get_name() == "width") {
+        width_ = parameter.as_double();
+      }
+      else if (parameter.get_name() == "height") {
+        height_ = parameter.as_double();
+      }
+      else if (parameter.get_name() == "f") {
+        f_ = parameter.as_double();
+      }
+    }
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    return result;
+  }
+
   void CameraInfoPublisher::initializeInteractiveMarker()
   {
-    visualization_msgs::InteractiveMarker int_marker;
+    visualization_msgs::msg::InteractiveMarker int_marker;
     int_marker.header.frame_id = parent_frame_id_;
     int_marker.name = "camera info";
     im_helpers::add6DofControl(int_marker, false);
     server_->insert(int_marker,
-                    boost::bind(&CameraInfoPublisher::processFeedback, this, _1));
+                    std::bind(&CameraInfoPublisher::processFeedback, this,
+                              std::placeholders::_1));
     server_->applyChanges();
   }
 
   void CameraInfoPublisher::processFeedback(
-    const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback)
+    visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr feedback)
   {
-    boost::mutex::scoped_lock lock(mutex_);
-    geometry_msgs::PoseStamped new_pose, transformed_pose;
+    std::lock_guard<std::mutex> lock(mutex_);
+    geometry_msgs::msg::PoseStamped new_pose, transformed_pose;
     new_pose.pose = feedback->pose;
     new_pose.header = feedback->header;
     try {
-      tf_listener_->transformPose(
-        parent_frame_id_,
-        new_pose, transformed_pose);
+      transformed_pose = tf_buffer_->transform(new_pose, parent_frame_id_);
       latest_pose_ = transformed_pose.pose;
     }
     catch (...) {
-      ROS_FATAL("tf exception");
+      RCLCPP_FATAL(this->get_logger(), "tf exception");
       return;
     }
   }
 
-
-  void CameraInfoPublisher::configCallback(Config &config, uint32_t level)
+  void CameraInfoPublisher::publishCameraInfo(const rclcpp::Time& stamp)
   {
-    boost::mutex::scoped_lock lock(mutex_);
-    width_ = config.width;
-    height_ = config.height;
-    f_ = config.f;
-  }
-
-  void CameraInfoPublisher::publishCameraInfo(const ros::Time& stamp)
-  {
-    boost::mutex::scoped_lock lock(mutex_);
-    sensor_msgs::CameraInfo camera_info;
+    std::lock_guard<std::mutex> lock(mutex_);
+    sensor_msgs::msg::CameraInfo camera_info;
     camera_info.header.stamp = stamp;
     camera_info.header.frame_id = frame_id_;
     if (yaml_filename_ != "") {
@@ -163,8 +199,8 @@ namespace jsk_interactive_marker
       camera_info.distortion_model =
         camera_info_yaml_["camera_model"].as<std::string>();
       std::vector<double> D, K, R, P;
-      boost::array<double, 9ul> Kl, Rl;
-      boost::array<double, 12ul> Pl;
+      std::array<double, 9ul> Kl, Rl;
+      std::array<double, 12ul> Pl;
       D = camera_info_yaml_["distortion_coefficients"]["data"].as<std::vector<double>>();
       K = camera_info_yaml_["camera_matrix"]["data"].as<std::vector<double>>();
       std::memcpy(&Kl[0], &K[0], sizeof(double)*9);
@@ -172,67 +208,63 @@ namespace jsk_interactive_marker
       std::memcpy(&Rl[0], &R[0], sizeof(double)*9);
       P = camera_info_yaml_["projection_matrix"]["data"].as<std::vector<double>>();
       std::memcpy(&Pl[0], &P[0], sizeof(double)*12);
-      camera_info.D = D;
-      camera_info.K = Kl;
-      camera_info.R = Rl;
-      camera_info.P = Pl;
+      camera_info.d = D;
+      camera_info.k = Kl;
+      camera_info.r = Rl;
+      camera_info.p = Pl;
     }
     else {
       camera_info.height = height_;
       camera_info.width = width_;
       camera_info.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
-      camera_info.D.resize(5, 0);
-      camera_info.K.assign(0.0);
-      camera_info.R.assign(0.0);
-      camera_info.P.assign(0.0);
-      camera_info.K[0] = camera_info.K[4] = f_;
+      camera_info.d.resize(5, 0);
+      camera_info.k.fill(0.0);
+      camera_info.r.fill(0.0);
+      camera_info.p.fill(0.0);
+      camera_info.k[0] = camera_info.k[4] = f_;
 
-      camera_info.K[0] = camera_info.P[0] = camera_info.K[4] = camera_info.P[5] = f_;
-      camera_info.K[2] = camera_info.P[2] = width_ / 2.0;
-      camera_info.K[5] = camera_info.P[6] = height_ / 2.0;
-      camera_info.K[8] = camera_info.P[10] = 1.0;
-      camera_info.R[0] = camera_info.R[4] = camera_info.R[8] = 1.0;
+      camera_info.k[0] = camera_info.p[0] = camera_info.k[4] = camera_info.p[5] = f_;
+      camera_info.k[2] = camera_info.p[2] = width_ / 2.0;
+      camera_info.k[5] = camera_info.p[6] = height_ / 2.0;
+      camera_info.k[8] = camera_info.p[10] = 1.0;
+      camera_info.r[0] = camera_info.r[4] = camera_info.r[8] = 1.0;
     }
-    pub_camera_info_.publish(camera_info);
-    static tf::TransformBroadcaster br;
-    tf::Transform transform;
-    transform.setOrigin(tf::Vector3(latest_pose_.position.x,
-                                    latest_pose_.position.y,
-                                    latest_pose_.position.z));
-    tf::Quaternion q(latest_pose_.orientation.x,
-                     latest_pose_.orientation.y,
-                     latest_pose_.orientation.z,
-                     latest_pose_.orientation.w);
-    transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, stamp,
-                                          parent_frame_id_, frame_id_));
+    pub_camera_info_->publish(camera_info);
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.stamp = stamp;
+    transform.header.frame_id = parent_frame_id_;
+    transform.child_frame_id = frame_id_;
+    transform.transform.translation.x = latest_pose_.position.x;
+    transform.transform.translation.y = latest_pose_.position.y;
+    transform.transform.translation.z = latest_pose_.position.z;
+    transform.transform.rotation = latest_pose_.orientation;
+    tf_broadcaster_->sendTransform(transform);
   }
 
   void CameraInfoPublisher::pointcloudCallback(
-    const sensor_msgs::PointCloud2::ConstPtr& msg)
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
   {
     publishCameraInfo(msg->header.stamp);
   }
-  
+
   void CameraInfoPublisher::imageCallback(
-    const sensor_msgs::Image::ConstPtr& msg)
+    const sensor_msgs::msg::Image::ConstSharedPtr msg)
   {
     publishCameraInfo(msg->header.stamp);
   }
-  
-  void CameraInfoPublisher::staticRateCallback(
-    const ros::TimerEvent& event)
+
+  void CameraInfoPublisher::staticRateCallback()
   {
-    publishCameraInfo(event.current_real);
+    publishCameraInfo(this->now());
   }
-  
+
 }
 
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "camera_info_publisher");
-  jsk_interactive_marker::CameraInfoPublisher publisher;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<jsk_interactive_marker::CameraInfoPublisher>());
+  rclcpp::shutdown();
   return 0;
 }
