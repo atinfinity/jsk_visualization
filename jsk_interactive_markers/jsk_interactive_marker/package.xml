@@ -6,10 +6,11 @@
   <description>interactive markers for jsk (ROS 2)</description>
   <maintainer email="k-okada@jsk.t.u-tokyo.ac.jp">Kei Okada</maintainer>
   <license>BSD</license>
-  <author email="youhei@jsk.t.u-tokyo.ac.jp">Yohei Kakiuchi</author>
 
   <url type="repository">https://github.com/jsk-ros-pkg/jsk_visualization</url>
   <url type="bugtracker">https://github.com/jsk-ros-pkg/jsk_visualization/issues</url>
+
+  <author email="youhei@jsk.t.u-tokyo.ac.jp">Yohei Kakiuchi</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

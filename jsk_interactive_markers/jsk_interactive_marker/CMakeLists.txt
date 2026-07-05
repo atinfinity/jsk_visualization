@@ -166,6 +166,22 @@ install(DIRECTORY launch config models urdf DESTINATION share/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_xmllint REQUIRED)
   ament_xmllint()
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_plugin_load test/test_plugin_load.cpp
+    SKIP_LINKING_MAIN_LIBRARIES
+    ENV QT_QPA_PLATFORM=offscreen)
+  if(TARGET test_plugin_load)
+    target_link_libraries(test_plugin_load
+      Qt5::Widgets
+      rviz_common::rviz_common
+      pluginlib::pluginlib)
+    target_compile_definitions(test_plugin_load PRIVATE QT_NO_KEYWORDS)
+  endif()
+  find_package(launch_testing_ament_cmake REQUIRED)
+  add_launch_test(test/test_transformable_server.test.py
+    TIMEOUT 120)
+  add_launch_test(test/test_executables_smoke.test.py
+    TIMEOUT 120)
 endif()
 
 ament_export_targets(export_${PROJECT_NAME})
