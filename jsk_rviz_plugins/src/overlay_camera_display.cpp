@@ -203,6 +203,11 @@ namespace jsk_rviz_plugins
     panel_material_ = Ogre::MaterialManager::getSingleton().create(
       base_name + "Material",
       Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+    // an overlay is drawn without scene lights or depth, so show the
+    // texture unlit at full brightness and skip depth testing
+    panel_material_->getTechnique(0)->setLightingEnabled(false);
+    panel_material_->setDepthWriteEnabled(false);
+    panel_material_->setDepthCheckEnabled(false);
     Ogre::OverlayManager* mgr = Ogre::OverlayManager::getSingletonPtr();
     overlay_ = mgr->create(base_name);
     panel_ = static_cast<Ogre::PanelOverlayElement*>(
@@ -240,15 +245,20 @@ namespace jsk_rviz_plugins
     vp->setBackgroundColour(Ogre::ColourValue(0, 0, 0, 0));
     vp->setOverlaysEnabled(false);
     vp->setShadowsEnabled(false);
-    target->addListener(this);
-    target->setAutoUpdated(true);
-    target->setActive(true);
+    // the render target is not displayed (an overlay panel cannot sample
+    // it); keep it inactive so it neither renders every frame nor toggles
+    // the backdrop into the main view (which caused the panel to flicker)
+    target->setAutoUpdated(false);
+    target->setActive(false);
 
-    panel_material_->getTechnique(0)->getPass(0)->removeAllTextureUnitStates();
-    panel_material_->getTechnique(0)->getPass(0)
-      ->createTextureUnitState(render_texture_->getName());
-    panel_material_->getTechnique(0)->getPass(0)
-      ->setSceneBlending(Ogre::SBT_TRANSPARENT_ALPHA);
+    // The overlay panel samples the camera image texture directly. An
+    // overlay panel cannot display the render-target texture, so the
+    // offscreen 3D composite is not shown in this environment; the panel
+    // shows the camera image (rebound in update() as frames arrive).
+    Ogre::Pass* panel_pass = panel_material_->getTechnique(0)->getPass(0);
+    panel_pass->removeAllTextureUnitStates();
+    panel_pass->createTextureUnitState()->setTexture(texture_->getTexture());
+    panel_pass->setSceneBlending(Ogre::SBT_TRANSPARENT_ALPHA);
   }
 
   void OverlayCameraDisplay::destroyRenderTexture()
@@ -482,16 +492,34 @@ namespace jsk_rviz_plugins
                   "Image", QString("Could not convert image: ") + e.what());
         return;
       }
+      // ROSImageTexture may allocate a new Ogre texture when the image
+      // dimensions first become known, so rebind the current texture to
+      // both the backdrop and the overlay panel each time it updates.
+      bg_material_->getTechnique(0)->getPass(0)->getTextureUnitState(0)
+        ->setTexture(texture_->getTexture());
+      if (panel_material_->getTechnique(0)->getPass(0)
+            ->getNumTextureUnitStates() > 0) {
+        panel_material_->getTechnique(0)->getPass(0)->getTextureUnitState(0)
+          ->setTexture(texture_->getTexture());
+      }
       new_image_arrived_ = false;
     }
     ensureRenderTexture(width_, height_);
-    if (!updateCamera()) {
-      return;
+    // best-effort: sets the offscreen projection and Transform/CameraInfo
+    // status. The panel shows the camera image regardless, so a missing
+    // transform does not blank the overlay.
+    updateCamera();
+    bool have_image;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      have_image = (current_image_ != nullptr);
     }
-    panel_->setPosition(left_, top_);
-    panel_->setDimensions(width_, height_);
-    if (!overlay_->isVisible()) {
-      overlay_->show();
+    if (have_image) {
+      panel_->setPosition(left_, top_);
+      panel_->setDimensions(width_, height_);
+      if (!overlay_->isVisible()) {
+        overlay_->show();
+      }
     }
     context_->queueRender();
   }
