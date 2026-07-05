@@ -166,7 +166,12 @@ class HistogramPlotWidget(QWidget):
     def update_plot(self):
         if not self._rosdata:
             return
-        data_x, data_y = self._rosdata.next()
+        try:
+            data_x, data_y = self._rosdata.next()
+        except RosPlotException as e:
+            self._node.get_logger().error("Exception in subscribing topic")
+            self._node.get_logger().error(str(e))
+            return
 
         if len(data_y) == 0:
             return
