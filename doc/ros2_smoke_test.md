@@ -2,7 +2,9 @@
 
 全49プラグインクラスの動作確認状況。
 「ロード」列は `test_plugin_load` gtest(pluginlibでの生成+破棄、ViewControllerはライブラリ解決のみ)により**CIで毎回自動確認**される。
-「描画」列は実データを流した rviz2 での目視/無エラー確認(最終実施: 2026-07-04、DISPLAY=:1、スクリーンショット目視+トピック/サービス/ファイル出力のプログラム検証)。
+「描画」列は実データを流した rviz2 での目視/無エラー確認(最終実施: 2026-07-05、DISPLAY=:1 で全15サンプルlaunchをRViz2全画面表示で再確認、スクリーンショット目視+トピック/サービス/ファイル出力のプログラム検証)。
+
+2026-07-05 の全画面再確認で3件の不具合を発見・修正した(commit 0193916): PictogramArray(config の Fixed Frame が map になっており base_link の pictogram が未表示 → base_link に修正)、LinkMarker(publisher が cylinder プリミティブで AttributeError クラッシュ → box/cylinder/sphere 対応に一般化)、OverlayCamera(オーバーレイパネルはレンダーターゲットテクスチャをサンプルできず黒 → カメラ画像テクスチャを直接表示、TF非依存化)。
 
 CIでは上記gtestに加え、launch_testingで
 「サンプルパブリッシャ13本が実際にトピックへ配信すること」
