@@ -1,52 +1,17 @@
-from distutils.version import LooseVersion
-import math
-import os
-import sys
 from threading import Lock
 
-import python_qt_binding
-import python_qt_binding.QtCore as QtCore
-from python_qt_binding.QtCore import QEvent
-from python_qt_binding.QtCore import QSize
-from python_qt_binding.QtCore import Qt
 from python_qt_binding.QtCore import QTimer
-from python_qt_binding.QtCore import qWarning
-from python_qt_binding.QtCore import Slot
-import python_qt_binding.QtGui as QtGui
 from python_qt_binding.QtGui import QBrush
 from python_qt_binding.QtGui import QColor
 from python_qt_binding.QtGui import QFont
-from python_qt_binding.QtGui import QIcon
 from python_qt_binding.QtGui import QPainter
 from python_qt_binding.QtGui import QPen
-import yaml
+from python_qt_binding.QtWidgets import QWidget
 
-from resource_retriever import get_filename
-import rospy
 from rqt_gui_py.plugin import Plugin
-from std_msgs.msg import Bool
-from std_msgs.msg import Time
 from std_msgs.msg import UInt8
 
 from .image_view2_wrapper import ComboBoxDialog
-
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QAction
-    from python_qt_binding.QtWidgets import QComboBox
-    from python_qt_binding.QtWidgets import QLabel
-    from python_qt_binding.QtWidgets import QMenu
-    from python_qt_binding.QtWidgets import QMessageBox
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QWidget
-
-else:
-    from python_qt_binding.QtGui import QAction
-    from python_qt_binding.QtGui import QComboBox
-    from python_qt_binding.QtGui import QLabel
-    from python_qt_binding.QtGui import QMenu
-    from python_qt_binding.QtGui import QMessageBox
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QWidget
 
 
 class StatusLight(Plugin):
@@ -60,7 +25,7 @@ class StatusLight(Plugin):
     def __init__(self, context):
         super(StatusLight, self).__init__(context)
         self.setObjectName("StatusLight")
-        self._widget = StatusLightWidget()
+        self._widget = StatusLightWidget(context.node)
         context.add_widget(self._widget)
 
     def save_settings(self, plugin_settings, instance_settings):
@@ -79,8 +44,9 @@ class StatusLightWidget(QWidget):
     _WARN_COLOR = QColor("#FFCA00")
     _ERROR_COLOR = QColor("#F44336")
 
-    def __init__(self):
+    def __init__(self, node):
         super(StatusLightWidget, self).__init__()
+        self._node = node
         self.lock = Lock()
         self.status_sub = None
         self.status = 0
@@ -92,7 +58,7 @@ class StatusLightWidget(QWidget):
         self._dialog = ComboBoxDialog()
         self._update_plot_timer = QTimer(self)
         self._update_plot_timer.timeout.connect(self.redraw)
-        self._update_plot_timer.start(1000 / 15)
+        self._update_plot_timer.start(1000 // 15)
 
     def redraw(self):
         self.update()
@@ -113,7 +79,8 @@ class StatusLightWidget(QWidget):
             qp.setPen(QPen(QBrush(color), 50))
             qp.setBrush(color)
             qp.drawEllipse(
-                (rect.width() - radius) / 2, (rect.height() - radius) / 2,
+                int((rect.width() - radius) / 2),
+                int((rect.height() - radius) / 2),
                 radius, radius)
             qp.end()
             return
@@ -123,9 +90,12 @@ class StatusLightWidget(QWidget):
         self.setupSubscriber(self._status_topics[self._dialog.number])
 
     def updateTopics(self):
+        if not self._node.context.ok():
+            # the Qt timer can fire while rclpy is shutting down
+            return
         need_to_update = False
-        for (topic, topic_type) in rospy.get_published_topics():
-            if topic_type == "std_msgs/UInt8":
+        for (topic, topic_types) in self._node.get_topic_names_and_types():
+            if 'std_msgs/msg/UInt8' in topic_types:
                 if not topic in self._status_topics:
                     self._status_topics.append(topic)
                     need_to_update = True
@@ -143,9 +113,9 @@ class StatusLightWidget(QWidget):
 
     def setupSubscriber(self, topic):
         if self.status_sub:
-            self.status_sub.unregister()
-        self.status_sub = rospy.Subscriber(topic, UInt8,
-                                           self.statusCallback)
+            self._node.destroy_subscription(self.status_sub)
+        self.status_sub = self._node.create_subscription(
+            UInt8, topic, self.statusCallback, 10)
         self._active_topic = topic
 
     def onActivated(self, number):

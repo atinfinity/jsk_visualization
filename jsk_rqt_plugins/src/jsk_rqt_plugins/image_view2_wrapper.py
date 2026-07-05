@@ -1,67 +1,27 @@
-from distutils.version import LooseVersion
-import math
-import os
-import sys
-from threading import Lock, Thread
-import time
+from threading import Lock
 
 import cv2
 import numpy as np
-import python_qt_binding
 from python_qt_binding.QtCore import pyqtSignal
 from python_qt_binding.QtCore import pyqtSlot
-from python_qt_binding.QtCore import QEvent
-from python_qt_binding.QtCore import QSize
 from python_qt_binding.QtCore import Qt
 import python_qt_binding.QtCore as QtCore
 from python_qt_binding.QtCore import QTimer
-from python_qt_binding.QtCore import qWarning
-from python_qt_binding.QtCore import Slot
-from python_qt_binding.QtGui import QBrush
-from python_qt_binding.QtGui import QColor
-from python_qt_binding.QtGui import QFont
-from python_qt_binding.QtGui import QIcon
 from python_qt_binding.QtGui import QImage
-from python_qt_binding.QtGui import QPainter
-from python_qt_binding.QtGui import QPen
 from python_qt_binding.QtGui import QPixmap
-from python_qt_binding.QtGui import qRgb
-import python_qt_binding.QtGui as QtGui
-import yaml
+from python_qt_binding.QtWidgets import QComboBox
+from python_qt_binding.QtWidgets import QDialog
+from python_qt_binding.QtWidgets import QLabel
+from python_qt_binding.QtWidgets import QPushButton
+from python_qt_binding.QtWidgets import QSizePolicy
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
 
 from cv_bridge import CvBridge
 from cv_bridge import CvBridgeError
 from image_view2.msg import MouseEvent
-from resource_retriever import get_filename
-import rospy
 from rqt_gui_py.plugin import Plugin
 from sensor_msgs.msg import Image
-from std_msgs.msg import Bool
-from std_msgs.msg import Time
-
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QAction
-    from python_qt_binding.QtWidgets import QComboBox
-    from python_qt_binding.QtWidgets import QDialog
-    from python_qt_binding.QtWidgets import QMenu
-    from python_qt_binding.QtWidgets import QMessageBox
-    from python_qt_binding.QtWidgets import QLabel
-    from python_qt_binding.QtWidgets import QPushButton
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QVBoxLayout
-    from python_qt_binding.QtWidgets import QWidget
-
-else:
-    from python_qt_binding.QtGui import QAction
-    from python_qt_binding.QtGui import QComboBox
-    from python_qt_binding.QtGui import QDialog
-    from python_qt_binding.QtGui import QMenu
-    from python_qt_binding.QtGui import QMessageBox
-    from python_qt_binding.QtGui import QLabel
-    from python_qt_binding.QtGui import QPushButton
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QVBoxLayout
-    from python_qt_binding.QtGui import QWidget
 
 
 class ComboBoxDialog(QDialog):
@@ -92,7 +52,7 @@ class ImageView2Plugin(Plugin):
     def __init__(self, context):
         super(ImageView2Plugin, self).__init__(context)
         self.setObjectName("ImageView2Plugin")
-        self._widget = ImageView2Widget()
+        self._widget = ImageView2Widget(context.node)
         context.add_widget(self._widget)
 
     def save_settings(self, plugin_settings, instance_settings):
@@ -124,8 +84,9 @@ class ImageView2Widget(QWidget):
     pixmap = None
     repaint_trigger = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, node):
         super(ImageView2Widget, self).__init__()
+        self._node = node
         self.left_button_clicked = False
 
         self.repaint_trigger.connect(self.redraw)
@@ -144,8 +105,12 @@ class ImageView2Widget(QWidget):
         self.setLayout(vbox)
 
         self._image_topics = []
-        self._update_topic_thread = Thread(target=self.updateTopics)
-        self._update_topic_thread.start()
+        # In ROS 1 this was a (one-shot) background thread; a periodic
+        # QTimer poll of the ROS graph gives the same behavior and keeps
+        # all GUI updates in the Qt thread.
+        self._update_topic_timer = QTimer(self)
+        self._update_topic_timer.timeout.connect(self.updateTopics)
+        self._update_topic_timer.start(1000)
 
         self._active_topic = None
         self.setMouseTracking(True)
@@ -159,13 +124,13 @@ class ImageView2Widget(QWidget):
 
     def setupSubscriber(self, topic):
         if self.image_sub:
-            self.image_sub.unregister()
-        rospy.loginfo("Subscribing %s" % (topic + "/marked"))
-        self.image_sub = rospy.Subscriber(topic + "/marked",
-                                          Image, 
-                                          self.imageCallback)
-        self.event_pub = rospy.Publisher(
-            topic + "/event", MouseEvent, queue_size=1)
+            self._node.destroy_subscription(self.image_sub)
+        self._node.get_logger().info(
+            "Subscribing %s" % (topic + "/marked"))
+        self.image_sub = self._node.create_subscription(
+            Image, topic + "/marked", self.imageCallback, 1)
+        self.event_pub = self._node.create_publisher(
+            MouseEvent, topic + "/event", 1)
         self._active_topic = topic
 
     def onActivated(self, number):
@@ -174,7 +139,8 @@ class ImageView2Widget(QWidget):
     def imageCallback(self, msg):
         with self.lock:
             if msg.width == 0 or msg.height == 0:
-                rospy.logdebug("Looks input images is invalid")
+                self._node.get_logger().debug(
+                    "Looks input images is invalid")
                 return
             cv_image = self.bridge.imgmsg_to_cv2(msg, msg.encoding)
             if msg.encoding == "bgr8":
@@ -186,9 +152,12 @@ class ImageView2Widget(QWidget):
             self.repaint_trigger.emit()
 
     def updateTopics(self):
+        if not self._node.context.ok():
+            # the Qt timer can fire while rclpy is shutting down
+            return
         need_to_update = False
-        for (topic, topic_type) in rospy.get_published_topics():
-            if topic_type == "sensor_msgs/Image":
+        for (topic, topic_types) in self._node.get_topic_names_and_types():
+            if 'sensor_msgs/msg/Image' in topic_types:
                 with self.lock:
                     if not topic in self._image_topics:
                         self._image_topics.append(topic)
@@ -202,7 +171,6 @@ class ImageView2Widget(QWidget):
                 if self._active_topic:
                     self._dialog.combo_box.setCurrentIndex(
                         self._image_topics.index(self._active_topic))
-        time.sleep(1)
 
     @pyqtSlot()
     def redraw(self):
@@ -235,7 +203,7 @@ class ImageView2Widget(QWidget):
 
     def mouseMoveEvent(self, e):
         msg = MouseEvent()
-        msg.header.stamp = rospy.Time.now()
+        msg.header.stamp = self._node.get_clock().now().to_msg()
         msg.type = MouseEvent.MOUSE_MOVE
         msg.width = self.label.pixmap().width()
         msg.height = self.label.pixmap().height()
@@ -247,7 +215,7 @@ class ImageView2Widget(QWidget):
 
     def mousePressEvent(self, e):
         msg = MouseEvent()
-        msg.header.stamp = rospy.Time.now()
+        msg.header.stamp = self._node.get_clock().now().to_msg()
         if e.button() == Qt.LeftButton:
             msg.type = MouseEvent.MOUSE_LEFT_DOWN
             self.left_button_clicked = True
@@ -265,7 +233,7 @@ class ImageView2Widget(QWidget):
         if e.button() == Qt.LeftButton:
             self.left_button_clicked = False
             msg = MouseEvent()
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = self._node.get_clock().now().to_msg()
             msg.width = self.label.pixmap().width()
             msg.height = self.label.pixmap().height()
             msg.type = MouseEvent.MOUSE_LEFT_UP

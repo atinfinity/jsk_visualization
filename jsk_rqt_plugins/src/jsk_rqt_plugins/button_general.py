@@ -1,77 +1,52 @@
-from distutils.version import LooseVersion
-import math
 import os
-import sys
 
-import python_qt_binding
 import python_qt_binding.QtCore as QtCore
-from python_qt_binding.QtCore import QEvent
 from python_qt_binding.QtCore import QSize
-from python_qt_binding.QtCore import Qt
-from python_qt_binding.QtCore import QTimer
 from python_qt_binding.QtCore import QTranslator
-from python_qt_binding.QtCore import qWarning
-from python_qt_binding.QtCore import Slot
+from python_qt_binding.QtCore import Signal
 import python_qt_binding.QtGui as QtGui
-from python_qt_binding.QtGui import QBrush
-from python_qt_binding.QtGui import QColor
-from python_qt_binding.QtGui import QFont
-from python_qt_binding.QtGui import QIcon
-from python_qt_binding.QtGui import QPainter
-from python_qt_binding.QtGui import QPen
+from python_qt_binding.QtWidgets import QFileDialog
+from python_qt_binding.QtWidgets import QGroupBox
+from python_qt_binding.QtWidgets import QHBoxLayout
+from python_qt_binding.QtWidgets import QMessageBox
+from python_qt_binding.QtWidgets import QRadioButton
+from python_qt_binding.QtWidgets import QSizePolicy
+from python_qt_binding.QtWidgets import QToolButton
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
 import yaml
 
+from rclpy.exceptions import ParameterAlreadyDeclaredException
 from resource_retriever import get_filename
-import rospy
-from rqt_gui_py.plugin import Plugin
-from std_msgs.msg import Bool
-from std_msgs.msg import Time
 from std_srvs.srv import Empty
 from std_srvs.srv import SetBool
 from std_srvs.srv import Trigger
-
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QAction
-    from python_qt_binding.QtWidgets import QCompleter
-    from python_qt_binding.QtWidgets import QFileDialog
-    from python_qt_binding.QtWidgets import QGroupBox
-    from python_qt_binding.QtWidgets import QHBoxLayout
-    from python_qt_binding.QtWidgets import QMenu
-    from python_qt_binding.QtWidgets import QMessageBox
-    from python_qt_binding.QtWidgets import QRadioButton
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QToolButton
-    from python_qt_binding.QtWidgets import QVBoxLayout
-    from python_qt_binding.QtWidgets import QWidget
-
-else:
-    from python_qt_binding.QtGui import QAction
-    from python_qt_binding.QtGui import QCompleter
-    from python_qt_binding.QtGui import QFileDialog
-    from python_qt_binding.QtGui import QGroupBox
-    from python_qt_binding.QtGui import QHBoxLayout
-    from python_qt_binding.QtGui import QMenu
-    from python_qt_binding.QtGui import QMessageBox
-    from python_qt_binding.QtGui import QRadioButton
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QToolButton
-    from python_qt_binding.QtGui import QVBoxLayout
-    from python_qt_binding.QtGui import QWidget
 
 
 class ServiceButtonGeneralWidget(QWidget):
     """
     Qt widget to visualize multiple buttons
     """
-    def __init__(self, button_type="push"):
+    # emitted from the ROS spinner thread when an asynchronous service call
+    # failed; handled in the Qt GUI thread (queued connection)
+    _call_failed = Signal(str, object, bool)
+
+    def __init__(self, node, button_type="push"):
         super(ServiceButtonGeneralWidget, self).__init__()
+        self._node = node
         self.button_type = button_type
         self._layout_param = None
+        self._service_clients = {}
         self._translator = QTranslator()
         self._dialog = QFileDialog()
         self._dialog.setFileMode(QFileDialog.ExistingFile)
+        self._call_failed.connect(self._on_call_failed)
 
-        if rospy.has_param("~layout_yaml_file"):
+        try:
+            self._node.declare_parameter('layout_yaml_file', '')
+        except ParameterAlreadyDeclaredException:
+            pass
+        if self._node.get_parameter('layout_yaml_file').value:
             self.loadLayoutYaml(None)
 
         self.show()
@@ -81,8 +56,13 @@ class ServiceButtonGeneralWidget(QWidget):
 
     def loadLayoutYaml(self, layout_param):
         # Initialize layout of the buttons from yaml file
-        # The yaml file can be specified by rosparam
-        layout_yaml_file = rospy.get_param("~layout_yaml_file", layout_param)
+        # The yaml file can be specified by ROS parameter
+        layout_yaml_file = (
+            self._node.get_parameter('layout_yaml_file').value
+            or layout_param)
+        if not layout_yaml_file:
+            self.showError("No yaml file is specified for layout")
+            return False
         resolved_layout_yaml_file = get_filename(layout_yaml_file)
         if (resolved_layout_yaml_file is not None
                 and resolved_layout_yaml_file.startswith("file://")):
@@ -218,39 +198,66 @@ class ServiceButtonGeneralWidget(QWidget):
         return lambda checked: self.buttonCallbackImpl(checked, service_name, service_type, button)
 
     def buttonCallbackImpl(self, checked, service_name, service_type=Empty, button=None):
-        srv = rospy.ServiceProxy(service_name, service_type)
+        key = (service_name, service_type)
+        client = self._service_clients.get(key)
+        if client is None:
+            client = self._node.create_client(service_type, service_name)
+            self._service_clients[key] = client
+        if (not client.service_is_ready()
+                and not client.wait_for_service(timeout_sec=1.0)):
+            self._on_call_failed(
+                "Failed to call %s" % service_name,
+                button if service_type == SetBool else None, checked)
+            return
+        req = service_type.Request()
+        if service_type == SetBool:
+            req.data = checked
+        future = client.call_async(req)
+        # NOTE: the done callback runs on the rqt spinner thread. GUI updates
+        # are marshalled back to the Qt thread via the _call_failed signal.
+        future.add_done_callback(
+            lambda f: self._doneCallback(
+                f, service_name, service_type, button, checked))
+
+    def _doneCallback(self, future, service_name, service_type, button, checked):
         try:
-            if service_type == SetBool:
-                res = srv(checked)
-            else:
-                res = srv()
-            if hasattr(res, 'success'):
-                success = res.success
-                if not success:
-                    self.showError(
-                        "Succeeded to call {}, but service response is res.success=False"
-                        .format(service_name))
-                    if service_type == SetBool and not button is None:
-                        button.setChecked(not checked)
-        except rospy.ServiceException as e:
-            self.showError("Failed to call %s" % service_name)
-            if service_type == SetBool and not button is None:
-                button.setChecked(not checked)
+            res = future.result()
+        except Exception as e:
+            self._node.get_logger().error(
+                'Failed to call {}: {}'.format(service_name, e))
+            self._call_failed.emit(
+                "Failed to call %s" % service_name,
+                button if service_type == SetBool else None, checked)
+            return
+        if hasattr(res, 'success') and not res.success:
+            self._call_failed.emit(
+                "Succeeded to call {}, but service response is res.success=False"
+                .format(service_name),
+                button if service_type == SetBool else None, checked)
+
+    def _on_call_failed(self, message, button, checked):
+        self.showError(message)
+        if button is not None:
+            button.setChecked(not checked)
 
     def save_settings(self, plugin_settings, instance_settings):
         if self._layout_param:
             instance_settings.set_value("layout_param", self._layout_param)
-            rospy.loginfo("save setting is called. %s" % self._layout_param)
+            self._node.get_logger().info(
+                "save setting is called. %s" % self._layout_param)
 
     def restore_settings(self, plugin_settings, instance_settings):
         if instance_settings.value("layout_param"):
             self._layout_param = instance_settings.value("layout_param")
-            rospy.loginfo("restore setting is called. %s" % self._layout_param)
+            self._node.get_logger().info(
+                "restore setting is called. %s" % self._layout_param)
             updated = self.loadLayoutYaml(self._layout_param)
             if updated:
-                rospy.loginfo("succeeded to restore. %s" % self._layout_param)
+                self._node.get_logger().info(
+                    "succeeded to restore. %s" % self._layout_param)
             else:
-                rospy.logerr("failed to restore. %s" % self._layout_param)
+                self._node.get_logger().error(
+                    "failed to restore. %s" % self._layout_param)
 
     def trigger_configuration(self):
         self._layout_param = self._dialog.getOpenFileName(
@@ -259,12 +266,12 @@ class ServiceButtonGeneralWidget(QWidget):
 
         if self._layout_param:
             updated = self.loadLayoutYaml(self._layout_param)
-            rospy.loginfo(
+            self._node.get_logger().info(
                 "trigger configuration is called. %s" % self._layout_param)
             if updated:
-                rospy.loginfo(
+                self._node.get_logger().info(
                     "succeeded to configure. %s" % self._layout_param)
             else:
-                rospy.logerr(
+                self._node.get_logger().error(
                     "failed to configure. %s" % self._layout_param)
                 self.trigger_configuration()

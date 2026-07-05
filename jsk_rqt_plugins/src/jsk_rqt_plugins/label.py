@@ -1,65 +1,27 @@
-from distutils.version import LooseVersion
-import math
-import os
-import sys
+import time
 from threading import Lock
 
-import python_qt_binding
-import python_qt_binding.QtCore as QtCore
-from python_qt_binding.QtCore import QEvent
-from python_qt_binding.QtCore import QSize
 from python_qt_binding.QtCore import Qt
 from python_qt_binding.QtCore import QTimer
-from python_qt_binding.QtCore import qWarning
-from python_qt_binding.QtCore import Slot
 import python_qt_binding.QtGui as QtGui
-from python_qt_binding.QtGui import QBrush
-from python_qt_binding.QtGui import QColor
 from python_qt_binding.QtGui import QFont
-from python_qt_binding.QtGui import QIcon
-from python_qt_binding.QtGui import QPainter
-from python_qt_binding.QtGui import QPen
-import yaml
+from python_qt_binding.QtWidgets import QComboBox
+from python_qt_binding.QtWidgets import QCompleter
+from python_qt_binding.QtWidgets import QDialog
+from python_qt_binding.QtWidgets import QLabel
+from python_qt_binding.QtWidgets import QLineEdit
+from python_qt_binding.QtWidgets import QPushButton
+from python_qt_binding.QtWidgets import QSizePolicy
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
 
-from resource_retriever import get_filename
-import roslib
-import rospy
+from rosidl_runtime_py.utilities import get_message
 from rqt_gui_py.plugin import Plugin
-import rqt_plot
-from std_msgs.msg import Bool
-from std_msgs.msg import Time
+from rqt_plot.rosplot import RosPlotException
 from std_msgs.msg import String
 
 from .util import get_slot_type_field_names
 from .hist import ROSData
-
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QAction
-    from python_qt_binding.QtWidgets import QComboBox
-    from python_qt_binding.QtWidgets import QCompleter
-    from python_qt_binding.QtWidgets import QDialog
-    from python_qt_binding.QtWidgets import QLabel
-    from python_qt_binding.QtWidgets import QLineEdit
-    from python_qt_binding.QtWidgets import QMenu
-    from python_qt_binding.QtWidgets import QMessageBox
-    from python_qt_binding.QtWidgets import QPushButton
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QVBoxLayout
-    from python_qt_binding.QtWidgets import QWidget
-
-else:
-    from python_qt_binding.QtGui import QAction
-    from python_qt_binding.QtGui import QComboBox
-    from python_qt_binding.QtGui import QCompleter
-    from python_qt_binding.QtGui import QDialog
-    from python_qt_binding.QtGui import QLabel
-    from python_qt_binding.QtGui import QLineEdit
-    from python_qt_binding.QtGui import QMenu
-    from python_qt_binding.QtGui import QMessageBox
-    from python_qt_binding.QtGui import QPushButton
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QVBoxLayout
-    from python_qt_binding.QtGui import QWidget
 
 
 class LineEditDialog(QDialog):
@@ -69,9 +31,11 @@ class LineEditDialog(QDialog):
         self.button_pressed = False
         vbox = QVBoxLayout(self)
         # combo box
+        # NOTE: in ROS 1 the completer model was pre-filled with
+        # rospy.get_param_names(). ROS 2 has no global parameter server
+        # (parameters are node-local), so the model starts empty and is
+        # filled with topic/field names by StringLabelWidget.updateTopics.
         model = QtGui.QStandardItemModel(self)
-        for elm in rospy.get_param_names():
-            model.setItem(model.rowCount(), 0, QtGui.QStandardItem(elm))
         self.combo_box = QComboBox(self)
         self.line_edit = QLineEdit()
         self.combo_box.setLineEdit(self.line_edit)
@@ -100,7 +64,7 @@ class StringLabel(Plugin):
     def __init__(self, context):
         super(StringLabel, self).__init__(context)
         self.setObjectName("StringLabel")
-        self._widget = StringLabelWidget()
+        self._widget = StringLabelWidget(context.node)
         context.add_widget(self._widget)
 
     def save_settings(self, plugin_settings, instance_settings):
@@ -114,8 +78,9 @@ class StringLabel(Plugin):
 
 
 class StringLabelWidget(QWidget):
-    def __init__(self):
+    def __init__(self, node):
         super(StringLabelWidget, self).__init__()
+        self._node = node
         self.lock = Lock()
         vbox = QVBoxLayout(self)
         self.label = QLabel()
@@ -134,8 +99,12 @@ class StringLabelWidget(QWidget):
         self._active_topic = None
         # to update label visualization
         self._dialog = LineEditDialog()
+        self._node.get_logger().warn(
+            'StringLabel: showing values of ROS parameters is not supported '
+            'in ROS 2 (no global parameter server); only topic fields of '
+            'type string can be displayed.')
         self._rosdata = None
-        self._start_time = rospy.get_time()
+        self._start_time = time.time()
         self._update_label_timer = QTimer(self)
         self._update_label_timer.timeout.connect(self.updateLabel)
         self._update_label_timer.start(40)
@@ -149,7 +118,7 @@ class StringLabelWidget(QWidget):
             return
         try:
             _, data_y = self._rosdata.next()
-        except rqt_plot.rosplot.RosPlotException as e:
+        except RosPlotException as e:
             self._rosdata = None
             return
         if len(data_y) == 0:
@@ -163,18 +132,27 @@ class StringLabelWidget(QWidget):
         try:
             self.label.setText(self.string)
         except TypeError as e:
-            rospy.logwarn(e)
+            self._node.get_logger().warn('{}'.format(e))
 
     def updateTopics(self):
+        if not self._node.context.ok():
+            # the Qt timer can fire while rclpy is shutting down
+            return
         need_to_update = False
-        for (topic, topic_type) in rospy.get_published_topics():
-            msg = roslib.message.get_message_class(topic_type)
-            field_names = get_slot_type_field_names(msg, slot_type='string')
-            for field in field_names:
-                string_topic = topic + field
-                if string_topic not in self._string_topics:
-                    self._string_topics.append(string_topic)
-                    need_to_update = True
+        for (topic, topic_types) in self._node.get_topic_names_and_types():
+            for topic_type in topic_types:
+                try:
+                    msg = get_message(topic_type)
+                except (AttributeError, ModuleNotFoundError, ValueError,
+                        LookupError):
+                    continue
+                field_names = get_slot_type_field_names(
+                    msg, slot_type='string')
+                for field in field_names:
+                    string_topic = topic + field
+                    if string_topic not in self._string_topics:
+                        self._string_topics.append(string_topic)
+                        need_to_update = True
         if need_to_update:
             self._string_topics = sorted(self._string_topics)
             self._dialog.combo_box.clear()
@@ -189,13 +167,14 @@ class StringLabelWidget(QWidget):
 
     def setupSubscriber(self, topic):
         if not self._rosdata:
-            self._rosdata = ROSData(topic, self._start_time)
+            self._rosdata = ROSData(self._node, topic, self._start_time)
         else:
             if self._rosdata != topic:
                 self._rosdata.close()
-                self._rosdata = ROSData(topic, self._start_time)
+                self._rosdata = ROSData(self._node, topic, self._start_time)
             else:
-                rospy.logwarn("%s is already subscribed", topic)
+                self._node.get_logger().warn(
+                    "%s is already subscribed" % topic)
         self._active_topic = topic
 
     def onActivated(self, number):

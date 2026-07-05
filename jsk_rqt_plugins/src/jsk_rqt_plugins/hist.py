@@ -1,29 +1,25 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
-import collections
+import collections.abc
 import os
-import sys
+import time
 
-# https://stackoverflow.com/questions/11914472/stringio-in-python3
-# https://stackoverflow.com/questions/50797043/string-argument-expected-got-bytes-in-buffer-write
-try:
-    from cStringIO import StringIO ## for Python 2
-except ImportError:
-    from io import BytesIO as StringIO ## for Python 3
+from io import BytesIO as StringIO
 import cv2
 from cv_bridge import CvBridge
-from distutils.version import LooseVersion
 from matplotlib.figure import Figure
 import numpy as np
-import python_qt_binding
 from python_qt_binding import loadUi
 from python_qt_binding.QtCore import Qt
 from python_qt_binding.QtCore import QTimer
 from python_qt_binding.QtCore import Slot
 from python_qt_binding.QtGui import QIcon
-import rospkg
-import rospy
+from python_qt_binding.QtWidgets import QSizePolicy
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
+
+from ament_index_python.packages import get_package_share_directory
 from rqt_gui_py.plugin import Plugin
 from rqt_plot.rosplot import ROSData as _ROSData
 from rqt_plot.rosplot import RosPlotException
@@ -32,45 +28,14 @@ from sensor_msgs.msg import Image
 
 from jsk_recognition_msgs.msg import HistogramWithRange
 
-# qt5 in kinetic
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QVBoxLayout
-    from python_qt_binding.QtWidgets import QWidget
-    try:
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    except ImportError:
-        # work around bug in dateutil
-        import thread
-        sys.modules['_thread'] = thread
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    try:
-        from matplotlib.backends.backend_qt5agg import NavigationToolbar2QTAgg \
-            as NavigationToolbar
-    except ImportError:
-        from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT \
-            as NavigationToolbar
-else:
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QVBoxLayout
-    from python_qt_binding.QtGui import QWidget
-    try:
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    except ImportError:
-        # work around bug in dateutil
-        import thread
-        sys.modules['_thread'] = thread
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    try:
-        from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg \
-            as NavigationToolbar
-    except ImportError:
-        from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT \
-            as NavigationToolbar
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
+    as FigureCanvas
+try:
+    from matplotlib.backends.backend_qt5agg import NavigationToolbar2QTAgg \
+        as NavigationToolbar
+except ImportError:
+    from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT \
+        as NavigationToolbar
 
 
 class ROSData(_ROSData):
@@ -97,7 +62,7 @@ class HistogramPlot(Plugin):
         super(HistogramPlot, self).__init__(context)
         self.setObjectName('HistogramPlot')
         self._args = self._parse_args(context.argv())
-        self._widget = HistogramPlotWidget(self._args.topics)
+        self._widget = HistogramPlotWidget(context.node, self._args.topics)
         context.add_widget(self._widget)
 
     def _parse_args(self, argv):
@@ -117,12 +82,13 @@ class HistogramPlot(Plugin):
 class HistogramPlotWidget(QWidget):
     _redraw_interval = 40
 
-    def __init__(self, topics):
+    def __init__(self, node, topics):
         super(HistogramPlotWidget, self).__init__()
         self.setObjectName('HistogramPlotWidget')
-        rp = rospkg.RosPack()
-        ui_file = os.path.join(rp.get_path('jsk_rqt_plugins'),
-                               'resource', 'plot_histogram.ui')
+        self._node = node
+        ui_file = os.path.join(
+            get_package_share_directory('jsk_rqt_plugins'),
+            'resource', 'plot_histogram.ui')
         loadUi(ui_file, self)
         self.cv_bridge = CvBridge()
         self.subscribe_topic_button.setIcon(QIcon.fromTheme('add'))
@@ -131,12 +97,13 @@ class HistogramPlotWidget(QWidget):
         self.data_plot = MatHistogramPlot(self)
         self.data_plot_layout.addWidget(self.data_plot)
         self._topic_completer = TopicCompleter(self.topic_edit)
-        self._topic_completer.update_topics()
+        self._topic_completer.update_topics(self._node)
         self.topic_edit.setCompleter(self._topic_completer)
         self.data_plot.dropEvent = self.dropEvent
         self.data_plot.dragEnterEvent = self.dragEnterEvent
-        self._start_time = rospy.get_time()
+        self._start_time = time.time()
         self._rosdata = None
+        self.pub_image = None
         if len(topics) != 0:
             self.subscribe_topic(topics)
         self._update_plot_timer = QTimer(self)
@@ -163,17 +130,24 @@ class HistogramPlotWidget(QWidget):
 
     def subscribe_topic(self, topic_name):
         self.topic_with_field_name = topic_name
-        self.pub_image = rospy.Publisher(
-            topic_name + "/histogram_image", Image, queue_size=1)
+        try:
+            self.pub_image = self._node.create_publisher(
+                Image, topic_name + "/histogram_image", 1)
+        except Exception as e:
+            self._node.get_logger().warn(
+                'cannot advertise %s/histogram_image: %s' % (topic_name, e))
+            self.pub_image = None
         if not self._rosdata:
-            self._rosdata = ROSData(topic_name, self._start_time)
+            self._rosdata = ROSData(self._node, topic_name, self._start_time)
         else:
             if self._rosdata != topic_name:
                 self._rosdata.close()
                 self.data_plot.clear()
-                self._rosdata = ROSData(topic_name, self._start_time)
+                self._rosdata = ROSData(
+                    self._node, topic_name, self._start_time)
             else:
-                rospy.logwarn("%s is already subscribed", topic_name)
+                self._node.get_logger().warn(
+                    "%s is already subscribed" % topic_name)
 
     def enable_timer(self, enabled=True):
         if enabled:
@@ -203,33 +177,31 @@ class HistogramPlotWidget(QWidget):
             pos = [y.min_value for y in data_y[-1].bins]
             widths = [y.max_value - y.min_value for y in data_y[-1].bins]
             axes.set_xlim(xmin=pos[0], xmax=pos[-1] + widths[-1])
-        elif isinstance(data_y[-1], collections.Sequence):
+        elif isinstance(data_y[-1], (collections.abc.Sequence, np.ndarray)):
             xs = data_y[-1]
             pos = np.arange(len(xs))
             widths = [1] * len(xs)
             axes.set_xlim(xmin=0, xmax=len(xs))
         else:
-            rospy.logerr(
+            self._node.get_logger().error(
                 "Topic/Field name '%s' has unsupported '%s' type."
                 "List of float values and "
                 "jsk_recognition_msgs/HistogramWithRange are supported."
                 % (self.topic_with_field_name,
-                   self._rosdata.sub.data_class))
+                   self._rosdata.sub.msg_type))
             return
         # axes.xticks(range(5))
         for p, x, w in zip(pos, xs, widths):
             axes.bar(p, x, color='r', align='center', width=w)
         axes.legend([self.topic_with_field_name], prop={'size': '8'})
         self.data_plot._canvas.draw()
+        if self.pub_image is None:
+            return
         buffer = StringIO()
         self.data_plot._canvas.figure.savefig(buffer, format="png")
         buffer.seek(0)
         img_array = np.asarray(bytearray(buffer.read()), dtype=np.uint8)
-        if LooseVersion(cv2.__version__).version[0] < 3:
-            iscolor = cv2.CV_LOAD_IMAGE_COLOR
-        else:
-            iscolor = cv2.IMREAD_COLOR
-        img = cv2.imdecode(img_array, iscolor)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         self.pub_image.publish(self.cv_bridge.cv2_to_imgmsg(img, "bgr8"))
 
 

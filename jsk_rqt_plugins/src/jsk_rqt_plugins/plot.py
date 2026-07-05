@@ -1,23 +1,16 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
-from distutils.version import LooseVersion
 import os
 import sys
-if not hasattr(sys, 'maxint'): ## In python3, sys.maxint changed to sys.maxsize
-    sys.maxint = sys.maxsize
+import time
 
-import matplotlib
 from matplotlib.collections import LineCollection
 from matplotlib.collections import PathCollection
 from matplotlib.collections import PolyCollection
-from matplotlib.colors import colorConverter
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d
-from mpl_toolkits.mplot3d import Axes3D  # <-- Note the capitalization!
-import numpy
-import python_qt_binding
+import mpl_toolkits.mplot3d  # noqa: F401, registers the '3d' projection
 from python_qt_binding import loadUi
 from python_qt_binding.QtCore import Qt
 from python_qt_binding.QtCore import QTimer
@@ -25,58 +18,44 @@ from python_qt_binding.QtCore import qWarning
 from python_qt_binding.QtCore import Slot
 from python_qt_binding.QtGui import QColor
 from python_qt_binding.QtGui import QIcon
+from python_qt_binding.QtWidgets import QAction
+from python_qt_binding.QtWidgets import QMenu
+from python_qt_binding.QtWidgets import QSizePolicy
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
 
-import rospkg
-import rospy
+from ament_index_python.packages import get_package_share_directory
 from rqt_gui_py.plugin import Plugin
 from rqt_plot.rosplot import ROSData, RosPlotException
 from rqt_py_common.topic_completer import TopicCompleter
-from rqt_py_common.topic_helpers import is_slot_numeric
+from rqt_py_common.topic_helpers import get_field_type
 
-# Support both qt4 and qt5
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QAction
-    from python_qt_binding.QtWidgets import QMenu
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QVBoxLayout
-    from python_qt_binding.QtWidgets import QWidget
-    try:
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    except ImportError:
-        # work around bug in dateutil
-        import thread
-        sys.modules['_thread'] = thread
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    try:
-        from matplotlib.backends.backend_qt5agg \
-            import NavigationToolbar2QTAgg as NavigationToolbar
-    except ImportError:
-        from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT \
-            as NavigationToolbar
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
+    as FigureCanvas
+try:
+    from matplotlib.backends.backend_qt5agg \
+        import NavigationToolbar2QTAgg as NavigationToolbar
+except ImportError:
+    from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT \
+        as NavigationToolbar
 
-else:
-    from python_qt_binding.QtGui import QAction
-    from python_qt_binding.QtGui import QMenu
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QVBoxLayout
-    from python_qt_binding.QtGui import QWidget
-    try:
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    except ImportError:
-        # work around bug in dateutil
-        import thread
-        sys.modules['_thread'] = thread
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    try:
-        from matplotlib.backends.backend_qt4agg \
-            import NavigationToolbar2QTAgg as NavigationToolbar
-    except ImportError:
-        from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT \
-            as NavigationToolbar
+
+def is_slot_numeric(node, topic_name):
+    """Check whether the field pointed by topic_name is numeric.
+
+    ROS 2 replacement of rqt_py_common.topic_helpers.is_slot_numeric
+    (removed in ROS 2): uses topic_helpers.get_field_type instead.
+
+    :returns: is_numeric, is_array, message
+    """
+    field_type, is_array = get_field_type(topic_name, node)
+    if field_type in (int, float):
+        if is_array:
+            message = "topic %s is numeric array" % topic_name
+        else:
+            message = "topic %s is numeric" % topic_name
+        return True, is_array, message
+    return False, is_array, "topic %s is not numeric" % topic_name
 
 
 class MatDataPlot3D(QWidget):
@@ -85,9 +64,9 @@ class MatDataPlot3D(QWidget):
 """
         def __init__(self, parent=None):
             super(MatDataPlot3D.Canvas, self).__init__(Figure())
-            # self.fig = fig = plt.figure()
+            # Axes3D(fig) direct construction is deprecated since
+            # matplotlib 3.6; use add_subplot(projection='3d') instead
             self.axes = self.figure.add_subplot(111, projection='3d')
-            # self.axes = self.figure.gca(projection="3d")
             # self.axes.grid(True, color='gray')
             self.axes.set_xlabel('t')
             self.axes.set_xlim3d(0, 10)
@@ -185,7 +164,7 @@ class MatDataPlot3D(QWidget):
         # Set axis bounds
         ymin = ymax = None
         xmax = 0
-        xmin = sys.maxint
+        xmin = sys.maxsize
         for curve in self._curves.values():
             data_x, _, _, range_y, c = curve
             if len(data_x) == 0:
@@ -237,8 +216,10 @@ class Plot3D(Plugin):
     def __init__(self, context):
         super(Plot3D, self).__init__(context)
         self.setObjectName('Plot3D')
+        self._node = context.node
         self._args = self._parse_args(context.argv())
         self._widget = Plot3DWidget(
+            self._node,
             initial_topics=self._args.topics,
             start_paused=self._args.start_paused,
             buffer_length=self._args.buffer,
@@ -272,10 +253,9 @@ class Plot3D(Plugin):
                     c_topics.extend(["%s/%s" % (base, f) for f in fields if f])
                 else:
                     c_topics.append(sub_t)
-            # #1053: resolve command-line topic names
-            import rosgraph
-            c_topics = [rosgraph.names.script_resolve_name('rqt_plot', n)
-                        for n in c_topics]
+            # resolve command-line topic names
+            # (rosgraph.names.script_resolve_name in ROS 1)
+            c_topics = [self._node.resolve_topic_name(n) for n in c_topics]
             if type(c_topics) == list:
                 topic_list.extend(c_topics)
             else:
@@ -309,16 +289,17 @@ class Plot3D(Plugin):
 class Plot3DWidget(QWidget):
     _redraw_interval = 40
 
-    def __init__(self, initial_topics=None, start_paused=False,
+    def __init__(self, node, initial_topics=None, start_paused=False,
                  buffer_length=100, use_poly=True, no_legend=False):
         super(Plot3DWidget, self).__init__()
         self.setObjectName('Plot3DWidget')
+        self._node = node
         self._buffer_length = buffer_length
         self._initial_topics = initial_topics
 
-        rp = rospkg.RosPack()
-        ui_file = os.path.join(rp.get_path('jsk_rqt_plugins'),
-                               'resource', 'plot3d.ui')
+        ui_file = os.path.join(
+            get_package_share_directory('jsk_rqt_plugins'),
+            'resource', 'plot3d.ui')
         loadUi(ui_file, self)
         self.subscribe_topic_button.setIcon(QIcon.fromTheme('add'))
         self.remove_topic_button.setIcon(QIcon.fromTheme('remove'))
@@ -336,10 +317,10 @@ class Plot3DWidget(QWidget):
             self.pause_button.setChecked(True)
 
         self._topic_completer = TopicCompleter(self.topic_edit)
-        self._topic_completer.update_topics()
+        self._topic_completer.update_topics(self._node)
         self.topic_edit.setCompleter(self._topic_completer)
 
-        self._start_time = rospy.get_time()
+        self._start_time = time.time()
         self._rosdata = {}
         self._remove_topic_menu = QMenu()
 
@@ -370,7 +351,8 @@ class Plot3DWidget(QWidget):
             topic_name = str(event.mimeData().text())
 
         # check for numeric field type
-        is_numeric, is_array, message = is_slot_numeric(topic_name)
+        is_numeric, is_array, message = is_slot_numeric(
+            self._node, topic_name)
         if is_numeric and not is_array:
             event.acceptProposedAction()
         else:
@@ -389,9 +371,10 @@ class Plot3DWidget(QWidget):
     def on_topic_edit_textChanged(self, topic_name):
         # on empty topic name, update topics
         if topic_name in ('', '/'):
-            self._topic_completer.update_topics()
+            self._topic_completer.update_topics(self._node)
 
-        is_numeric, is_array, message = is_slot_numeric(topic_name)
+        is_numeric, is_array, message = is_slot_numeric(
+            self._node, topic_name)
         self.subscribe_topic_button.setEnabled(is_numeric and not is_array)
         self.subscribe_topic_button.setToolTip(message)
 
@@ -456,7 +439,8 @@ class Plot3DWidget(QWidget):
             qWarning('PlotWidget.add_topic(): topic already subscribed: %s' % topic_name)  # NOQA
             return
 
-        self._rosdata[topic_name] = ROSData(topic_name, self._start_time)
+        self._rosdata[topic_name] = ROSData(
+            self._node, topic_name, self._start_time)
         if self._rosdata[topic_name].error is not None:
             qWarning(str(self._rosdata[topic_name].error))
             del self._rosdata[topic_name]

@@ -1,78 +1,48 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import os
-import sys
+import time
 
-# https://stackoverflow.com/questions/11914472/stringio-in-python3
-# https://stackoverflow.com/questions/50797043/string-argument-expected-got-bytes-in-buffer-write
-try:
-    from cStringIO import StringIO ## for Python 2
-except ImportError:
-    from io import BytesIO as StringIO ## for Python 3
+from io import BytesIO as StringIO
 import cv2
 from cv_bridge import CvBridge
-from distutils.version import LooseVersion
 from matplotlib.figure import Figure
 import numpy as np
-import python_qt_binding
 from python_qt_binding import loadUi
 from python_qt_binding.QtCore import Qt
 from python_qt_binding.QtCore import QTimer
 from python_qt_binding.QtCore import Slot
 from python_qt_binding.QtGui import QIcon
-import rospkg
-import rospy
+from python_qt_binding.QtWidgets import QSizePolicy
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
+
+from ament_index_python.packages import get_package_share_directory
 from rqt_gui_py.plugin import Plugin
 from rqt_plot.rosplot import ROSData as _ROSData
 from rqt_plot.rosplot import RosPlotException
 from rqt_py_common.topic_completer import TopicCompleter
 from sensor_msgs.msg import Image
-from sklearn import linear_model
+
+# sklearn is an optional dependency, only needed for RANSAC line fitting
+try:
+    from sklearn import linear_model
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
 
 from jsk_recognition_msgs.msg import PlotData
 from jsk_recognition_msgs.msg import PlotDataArray
 
-# qt5 in kinetic
-if LooseVersion(python_qt_binding.QT_BINDING_VERSION).version[0] >= 5:
-    from python_qt_binding.QtWidgets import QSizePolicy
-    from python_qt_binding.QtWidgets import QVBoxLayout
-    from python_qt_binding.QtWidgets import QWidget
-    try:
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    except ImportError:
-        # work around bug in dateutil
-        import thread
-        sys.modules['_thread'] = thread
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    try:
-        from matplotlib.backends.backend_qt5agg import NavigationToolbar2QTAgg \
-            as NavigationToolbar
-    except ImportError:
-        from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT \
-            as NavigationToolbar
-else:
-    from python_qt_binding.QtGui import QSizePolicy
-    from python_qt_binding.QtGui import QVBoxLayout
-    from python_qt_binding.QtGui import QWidget
-    try:
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    except ImportError:
-        # work around bug in dateutil
-        import thread
-        sys.modules['_thread'] = thread
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg \
-            as FigureCanvas
-    try:
-        from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg \
-            as NavigationToolbar
-    except ImportError:
-        from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT \
-            as NavigationToolbar
-
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg \
+    as FigureCanvas
+try:
+    from matplotlib.backends.backend_qt5agg import NavigationToolbar2QTAgg \
+        as NavigationToolbar
+except ImportError:
+    from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT \
+        as NavigationToolbar
 
 
 class ROSData(_ROSData):
@@ -109,7 +79,7 @@ class Plot2D(Plugin):
         super(Plot2D, self).__init__(context)
         self.setObjectName('Plot2D')
         self._args = self._parse_args(context.argv())
-        self._widget = Plot2DWidget(self._args.topics)
+        self._widget = Plot2DWidget(context.node, self._args.topics)
         self._widget.is_line = self._args.line
         self._widget.fit_line = self._args.fit_line
         self._widget.fit_line_ransac = self._args.fit_line_ransac
@@ -155,12 +125,14 @@ class Plot2D(Plugin):
 class Plot2DWidget(QWidget):
     _redraw_interval = 10
 
-    def __init__(self, topics):
+    def __init__(self, node, topics):
         super(Plot2DWidget, self).__init__()
         self.setObjectName('Plot2DWidget')
-        rp = rospkg.RosPack()
+        self._node = node
+        self._ransac_warned = False
         ui_file = os.path.join(
-            rp.get_path('jsk_rqt_plugins'), 'resource', 'plot_histogram.ui')
+            get_package_share_directory('jsk_rqt_plugins'),
+            'resource', 'plot_histogram.ui')
         loadUi(ui_file, self)
         self.cv_bridge = CvBridge()
         self.subscribe_topic_button.setIcon(QIcon.fromTheme('add'))
@@ -169,12 +141,13 @@ class Plot2DWidget(QWidget):
         self.data_plot = MatPlot2D(self)
         self.data_plot_layout.addWidget(self.data_plot)
         self._topic_completer = TopicCompleter(self.topic_edit)
-        self._topic_completer.update_topics()
+        self._topic_completer.update_topics(self._node)
         self.topic_edit.setCompleter(self._topic_completer)
         self.data_plot.dropEvent = self.dropEvent
         self.data_plot.dragEnterEvent = self.dragEnterEvent
-        self._start_time = rospy.get_time()
+        self._start_time = time.time()
         self._rosdata = None
+        self.pub_image = None
         if len(topics) != 0:
             self.subscribe_topic(topics)
         self._update_plot_timer = QTimer(self)
@@ -201,19 +174,26 @@ class Plot2DWidget(QWidget):
         self.subscribe_topic(str(self.topic_edit.text()))
 
     def subscribe_topic(self, topic_name):
-        rospy.loginfo("subscribe topic")
+        self._node.get_logger().info("subscribe topic")
         self.topic_with_field_name = topic_name
-        self.pub_image = rospy.Publisher(
-            topic_name + "/plot_image", Image, queue_size=1)
+        try:
+            self.pub_image = self._node.create_publisher(
+                Image, topic_name + "/plot_image", 1)
+        except Exception as e:
+            self._node.get_logger().warn(
+                'cannot advertise %s/plot_image: %s' % (topic_name, e))
+            self.pub_image = None
         if not self._rosdata:
-            self._rosdata = ROSData(topic_name, self._start_time)
+            self._rosdata = ROSData(self._node, topic_name, self._start_time)
         else:
             if self._rosdata != topic_name:
                 self._rosdata.close()
                 self.data_plot.clear()
-                self._rosdata = ROSData(topic_name, self._start_time)
+                self._rosdata = ROSData(
+                    self._node, topic_name, self._start_time)
             else:
-                rospy.logwarn("%s is already subscribed", topic_name)
+                self._node.get_logger().warn(
+                    "%s is already subscribed" % topic_name)
 
     def enable_timer(self, enabled=True):
         if enabled:
@@ -249,6 +229,13 @@ class Plot2DWidget(QWidget):
             a, b = np.linalg.lstsq(A, Y, rcond=-1)[0]
             axes.plot(X, (a*X+b), "g--", label="{0} x + {1}".format(a, b))
         if msg.fit_line_ransac or self.fit_line_ransac:
+            if not HAS_SKLEARN:
+                if not self._ransac_warned:
+                    self._node.get_logger().warn(
+                        'sklearn is not installed; '
+                        'skipping RANSAC line fitting')
+                    self._ransac_warned = True
+                return
             model_ransac = linear_model.RANSACRegressor(
                 linear_model.LinearRegression(), min_samples=2,
                 residual_threshold=self.fit_line_ransac_outlier)
@@ -275,8 +262,8 @@ class Plot2DWidget(QWidget):
         try:
             data_x, data_y = self._rosdata.next()
         except RosPlotException as e:
-            rospy.logerr("Exception in subscribing topic")
-            rospy.logerr(e.message)
+            self._node.get_logger().error("Exception in subscribing topic")
+            self._node.get_logger().error(str(e))
             return
         if len(data_y) == 0:
             return
@@ -304,9 +291,10 @@ class Plot2DWidget(QWidget):
                 min_y = latest_msg.min_y
                 max_y = latest_msg.max_y
         else:
-            rospy.logerr(
-                "Topic should be jsk_recognition_msgs/PlotData",
+            self._node.get_logger().error(
+                "Topic should be jsk_recognition_msgs/PlotData "
                 "or jsk_recognition_msgs/PlotDataArray")
+            return
         for d in data:
             self.plot_one(d, axes)
         xs = add_list([d.xs for d in data])
@@ -330,15 +318,13 @@ class Plot2DWidget(QWidget):
         if self.ytitle:
             axes.set_ylabel(self.ytitle)
         self.data_plot._canvas.draw()
+        if self.pub_image is None:
+            return
         buffer = StringIO()
         self.data_plot._canvas.figure.savefig(buffer, format="png")
         buffer.seek(0)
         img_array = np.asarray(bytearray(buffer.read()), dtype=np.uint8)
-        if LooseVersion(cv2.__version__).version[0] < 2:
-            iscolor = cv2.CV_LOAD_IMAGE_COLOR
-        else:
-            iscolor = cv2.IMREAD_COLOR
-        img = cv2.imdecode(img_array, iscolor)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         self.pub_image.publish(self.cv_bridge.cv2_to_imgmsg(img, "bgr8"))
 
 
