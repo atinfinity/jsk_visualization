@@ -1,11 +1,45 @@
-#!/usr/bin/env python
+from setuptools import setup
 
-from distutils.core import setup
-from catkin_pkg.python_setup import generate_distutils_setup
+package_name = 'jsk_rqt_plugins'
 
-d = generate_distutils_setup(
-    packages=['jsk_rqt_plugins'],
-    package_dir={'': 'src'}
+setup(
+    name=package_name,
+    version='3.0.0',
+    package_dir={'': 'src'},
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+         ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml', 'plugin.xml']),
+        ('share/' + package_name + '/resource', [
+            'resource/plot3d.ui',
+            'resource/plot_histogram.ui',
+            'resource/yes_no_button.ui',
+            'resource/rqt_image_view2_button.perspective',
+            'resource/rqt_service_buttons.perspective',
+            'resource/rqt_service_radio_buttons.perspective',
+            'resource/service_button_layout.yaml',
+            'resource/service_radio_button_layout.yaml',
+        ]),
+        ('lib/' + package_name, [
+            'bin/rqt_2d_plot',
+            'bin/rqt_3d_plot',
+            'bin/rqt_drc_mini_maxwell',
+            'bin/rqt_histogram_plot',
+            'bin/rqt_image_view2',
+            'bin/rqt_service_buttons',
+            'bin/rqt_status_light',
+            'bin/rqt_string_label',
+            'bin/rqt_tabbed_buttons',
+            'bin/rqt_yn_btn',
+        ]),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    author='Yuto Inagaki',
+    maintainer='Kei Okada',
+    maintainer_email='k-okada@jsk.t.u-tokyo.ac.jp',
+    description='rqt plugins for jsk (ROS 2)',
+    license='BSD',
+    tests_require=['pytest'],
 )
-
-setup(**d)
