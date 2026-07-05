@@ -152,6 +152,15 @@ install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
 
+install(PROGRAMS
+  scripts/dummy_camera.py
+  scripts/semantic_robot_state_generator.py
+  scripts/transformable_joy_configure.py
+  scripts/transformable_markers_client.py
+  scripts/transformable_spacenav_configure.py
+  src/joint_state_publisher.py
+  DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch config models urdf DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

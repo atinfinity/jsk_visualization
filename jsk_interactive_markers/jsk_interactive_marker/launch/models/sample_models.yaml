@@ -1,0 +1,28 @@
+# sample models config for urdf_model_markers.launch.py
+#
+# The file is passed to urdf_model_marker via the "models_config_file"
+# string parameter.  The expected keys are documented at the top of
+# src/urdf_model_marker_main.cpp.
+models:
+  - name: "SampleModel"
+    description: "small self-contained sample model"
+    model: "package://jsk_interactive_marker/launch/models/sample.urdf"
+    frame-id: "map"
+    robot: true
+    scale: 1.02
+    pose:
+      position: {x: 0.0, y: 0.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    initial_joint_state:
+      - name: "arm_joint"
+        position: 0.5
+
+  - name: "SampleObject"
+    description: "the same model used as a non-robot object"
+    model: "package://jsk_interactive_marker/launch/models/sample.urdf"
+    frame-id: "map"
+    robot: false
+    use_visible_color: true
+    pose:
+      position: {x: 0.0, y: 1.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}

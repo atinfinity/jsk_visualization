@@ -1,87 +1,78 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import rospy
-
-PKG='sensor_msgs'
-
-import imp
-try:
-    imp.find_module(PKG)
-except:
-    import roslib;roslib.load_manifest(PKG)
+import rclpy
+from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
 
 from sensor_msgs.msg import Joy
-from geometry_msgs.msg import *
-from std_msgs.msg import *
+from std_msgs.msg import Float32
 
-x_max = 10
-y_max = 10
-z_max = 10
-r_max = 10
-sr_max = 10
+MIN_VALUE = 0.001
 
-x_small_max = 1
-y_small_max = 1
-z_small_max = 1
-r_small_max = 1
-sr_small_max = 1
 
-MIN_VALUE=0.001
+class TransformableJoyConfigure(Node):
 
-def callback(msg):
-    global x_max, y_max, z_max, r_max, sr_max
-    global x_small_max, y_small_max, z_small_max, r_small_max, sr_small_max
-    a = msg.axes
-    b = msg.buttons
+    def __init__(self):
+        super().__init__("transformable_joy_configure")
+        self.set_x_pub = self.create_publisher(Float32, "set_x", 1)
+        self.set_y_pub = self.create_publisher(Float32, "set_y", 1)
+        self.set_z_pub = self.create_publisher(Float32, "set_z", 1)
+        self.set_r_pub = self.create_publisher(Float32, "set_radius", 1)
+        self.set_sr_pub = self.create_publisher(Float32, "set_small_radius", 1)
 
-    x_v1,y_v1,z_v1,r_v1,sr_v1 = a[13:]
-    x_v2,y_v2,z_v2,r_v2,sr_v2 = a[0:5]
+        self.x_max = self.declare_parameter("x_max", 10.0).value
+        self.y_max = self.declare_parameter("y_max", 10.0).value
+        self.z_max = self.declare_parameter("z_max", 10.0).value
+        self.r_max = self.declare_parameter("r_max", 10.0).value
+        self.sr_max = self.declare_parameter("sr_max", 10.0).value
 
-    x = Float32()
-    y = Float32()
-    z = Float32()
-    r = Float32()
-    sr= Float32()
+        self.x_small_max = self.declare_parameter("x_small_max", 1.0).value
+        self.y_small_max = self.declare_parameter("y_small_max", 1.0).value
+        self.z_small_max = self.declare_parameter("z_small_max", 1.0).value
+        self.r_small_max = self.declare_parameter("r_small_max", 1.0).value
+        self.sr_small_max = self.declare_parameter("sr_small_max", 1.0).value
 
-    x.data = x_max * (x_v1+1)/2 + x_small_max * (x_v2+1)/2;
-    y.data = y_max * (y_v1+1)/2 + y_small_max * (y_v2+1)/2;
-    z.data = z_max * (z_v1+1)/2 + z_small_max * (z_v2+1)/2;
-    r.data = r_max * (r_v1+1)/2 + r_small_max * (r_v2+1)/2;
-    sr.data= sr_max * (sr_v1+1)/2 + sr_small_max * (sr_v2+1)/2;
+        self.sub = self.create_subscription(
+            Joy, "input_joy", self.callback, 1)
 
-    x.data = max(MIN_VALUE,x.data)
-    y.data = max(MIN_VALUE,y.data)
-    z.data = max(MIN_VALUE,z.data)
-    r.data = max(MIN_VALUE,r.data)
-    sr.data = max(MIN_VALUE,sr.data)
+    def callback(self, msg):
+        a = msg.axes
 
-    set_x_pub.publish(x)
-    set_y_pub.publish(y)
-    set_z_pub.publish(z)
-    set_r_pub.publish(r)
-    set_sr_pub.publish(sr)
+        x_v1, y_v1, z_v1, r_v1, sr_v1 = a[13:18]
+        x_v2, y_v2, z_v2, r_v2, sr_v2 = a[0:5]
+
+        x = Float32()
+        y = Float32()
+        z = Float32()
+        r = Float32()
+        sr = Float32()
+
+        x.data = self.x_max * (x_v1 + 1) / 2 + self.x_small_max * (x_v2 + 1) / 2
+        y.data = self.y_max * (y_v1 + 1) / 2 + self.y_small_max * (y_v2 + 1) / 2
+        z.data = self.z_max * (z_v1 + 1) / 2 + self.z_small_max * (z_v2 + 1) / 2
+        r.data = self.r_max * (r_v1 + 1) / 2 + self.r_small_max * (r_v2 + 1) / 2
+        sr.data = self.sr_max * (sr_v1 + 1) / 2 + self.sr_small_max * (sr_v2 + 1) / 2
+
+        x.data = max(MIN_VALUE, x.data)
+        y.data = max(MIN_VALUE, y.data)
+        z.data = max(MIN_VALUE, z.data)
+        r.data = max(MIN_VALUE, r.data)
+        sr.data = max(MIN_VALUE, sr.data)
+
+        self.set_x_pub.publish(x)
+        self.set_y_pub.publish(y)
+        self.set_z_pub.publish(z)
+        self.set_r_pub.publish(r)
+        self.set_sr_pub.publish(sr)
+
 
 if __name__ == "__main__":
-    rospy.init_node("transformable_joy_configure")
-    set_x_pub = rospy.Publisher("set_x", Float32)
-    set_y_pub = rospy.Publisher("set_y", Float32)
-    set_z_pub = rospy.Publisher("set_z", Float32)
-    set_r_pub = rospy.Publisher("set_radius", Float32)
-    set_sr_pub = rospy.Publisher("set_small_radius", Float32)
-
-    x_max = rospy.get_param("~x_max")
-    y_max = rospy.get_param("~y_max")
-    z_max = rospy.get_param("~z_max")
-    r_max = rospy.get_param("~r_max")
-    sr_max = rospy.get_param("~sr_max")
-
-    x_small_max = rospy.get_param("~x_small_max")
-    y_small_max = rospy.get_param("~y_small_max")
-    z_small_max = rospy.get_param("~z_small_max")
-    r_small_max = rospy.get_param("~r_small_max")
-    sr_small_max = rospy.get_param("~sr_small_max")
-
-
-    s = rospy.Subscriber("input_joy", Joy, callback)
-    rospy.spin()
-
+    rclpy.init()
+    node = TransformableJoyConfigure()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.try_shutdown()

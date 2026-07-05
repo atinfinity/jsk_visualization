@@ -1,27 +1,22 @@
-# http://ros.org/doc/groovy/api/catkin/html/user_guide/supposed.html
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.16)
 project(jsk_interactive_test)
 
-find_package(catkin REQUIRED COMPONENTS visualization_msgs jsk_interactive jsk_interactive_marker)
+find_package(ament_cmake REQUIRED)
 
-catkin_package(
-    DEPENDS
-    CATKIN_DEPENDS visualization_msgs jsk_interactive jsk_interactive_marker
-    INCLUDE_DIRS
-    LIBRARIES
-)
+install(PROGRAMS
+  scripts/publish_goal_marker.py
+  scripts/trackpoint_controller.py
+  DESTINATION lib/${PROJECT_NAME})
 
-# From https://github.com/jsk-ros-pkg/jsk_recognition/pull/2345
-# Install header files directly into ${CATKIN_PACKAGE_INCLUDE_DESTINATION}.
-# If the package has setup.py and modules under src/${PROJECT_NAME}/,
-# install python executables directly into ${CATKIN_PACKAGE_BIN_DESTINATION}.
-# However, if it doesn't have setup.py, directories including python executables
-# should be installed recursively into ${CATKIN_PACKAGE_SHARE_DESTINATION}.
-# Also, other directories like 'launch' or 'sample' must be installed
-# recursively into ${CATKIN_PACKAGE_SHARE_DESTINATION}.
-# Be careful that 'launch' and 'launch/' are different: the former is directory
-# and the latter is each content.
-install(DIRECTORY launch scripts spacenav
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-  USE_SOURCE_PERMISSIONS
-)
+# mesh/texture resources referenced by publish_goal_marker.py
+install(DIRECTORY scripts spacenav
+  DESTINATION share/${PROJECT_NAME}
+  USE_SOURCE_PERMISSIONS)
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_xmllint REQUIRED)
+  ament_xmllint()
+endif()
+
+ament_package()
