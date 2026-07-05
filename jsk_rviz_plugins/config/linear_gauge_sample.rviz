@@ -32,6 +32,8 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /sample_piechart
       Value: true
+      auto color change: true
+      max value: 1
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
