@@ -1,5 +1,10 @@
 # Usage (ROS 2)
 
+All sample launch files below were checked on-screen with RViz2 in
+fullscreen (2026-07-06) and render as expected; see
+[`../../doc/jsk_interactive_marker/ros2_smoke_test.md`](../../doc/jsk_interactive_marker/ros2_smoke_test.md)
+for the result matrix.
+
 ## urdf_model_markers.launch.py
 This launch file generates interactive markers from URDF models.
 ```bash

@@ -21,16 +21,20 @@ source install/setup.bash
 
 ## Samples
 
-Ported sample launch files (rviz opens with the corresponding markers):
+Ported sample launch files (rviz opens with the corresponding markers).
+The "Verified" column records the on-screen rendering check done with
+RViz2 in fullscreen (2026-07-06); see
+[`doc/jsk_interactive_marker/ros2_smoke_test.md`](../doc/jsk_interactive_marker/ros2_smoke_test.md)
+for details.
 
-| launch | Description |
-|---|---|
-| `marker_6dof_sample.launch.py` | 6-DOF interactive markers (cube / sphere / line / mesh) |
-| `bounding_box_marker_sample.launch.py` | interactive markers for a `BoundingBoxArray` |
-| `transformable_server_sample.launch.py` | transformable-object server; insert a torus/box/cylinder via the rviz menu or the `request_marker_operate` service |
-| `sample_transformable_markers_client.launch.py` | transformable markers driven from a YAML config through the client |
-| `urdf_model_markers.launch.py` | interactive markers built from URDF models |
-| `sample_camera_info_publisher.launch.py` | `CameraInfo` publisher with an interactive camera marker (no rviz) |
+| launch | Description | Verified |
+|---|---|:---:|
+| `marker_6dof_sample.launch.py` | 6-DOF interactive markers (cube / sphere / line / mesh) — translation arrows + rotation rings + a mesh | ✅ |
+| `bounding_box_marker_sample.launch.py` | interactive markers for a `BoundingBoxArray` (three boxes) | ✅ |
+| `transformable_server_sample.launch.py` | transformable-object server; starts empty (by design), an object is drawn after inserting a torus/box/cylinder via the rviz menu or the `request_marker_operate` service | ✅ |
+| `sample_transformable_markers_client.launch.py` | transformable markers driven from a YAML config through the client (three labelled boxes) | ✅ |
+| `urdf_model_markers.launch.py` | interactive markers built from URDF models (two sample models + text labels) | ✅ |
+| `sample_camera_info_publisher.launch.py` | `CameraInfo` publisher with an interactive camera marker (no rviz; verified by topic) | ✅ |
 
 Examples:
 
