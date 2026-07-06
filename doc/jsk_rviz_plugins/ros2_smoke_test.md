@@ -2,7 +2,8 @@
 
 全49プラグインクラスの動作確認状況。
 「ロード」列は `test_plugin_load` gtest(pluginlibでの生成+破棄、ViewControllerはライブラリ解決のみ)により**CIで毎回自動確認**される。
-「描画」列は実データを流した rviz2 での目視/無エラー確認(最終実施: 2026-07-05、DISPLAY=:1 で全15サンプルlaunchをRViz2全画面表示で再確認、スクリーンショット目視+トピック/サービス/ファイル出力のプログラム検証)。
+「描画」列は実データを流した rviz2 での目視/無エラー確認。
+最終実施: 2026-07-06、DISPLAY=:1 で全サンプルlaunch(15)+パネル2種(robot_command_interface / service_call)+ contact_state_marker / face_detector を RViz2 全画面表示で再確認し、全て想定通りに描画されることをスクリーンショットで確認した(描画の回帰なし)。
 
 2026-07-05 の全画面再確認で3件の不具合を発見・修正した(commit 0193916): PictogramArray(config の Fixed Frame が map になっており base_link の pictogram が未表示 → base_link に修正)、LinkMarker(publisher が cylinder プリミティブで AttributeError クラッシュ → box/cylinder/sphere 対応に一般化)、OverlayCamera(オーバーレイパネルはレンダーターゲットテクスチャをサンプルできず黒 → カメラ画像テクスチャを直接表示、TF非依存化)。
 
