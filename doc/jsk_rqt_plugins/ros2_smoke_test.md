@@ -15,7 +15,7 @@ not just process logs.
 | YesNoButton | UI loads; buttons disabled until a /rqt_yn_btn request arrives (service advertisement verified separately) | rendered |
 | StatusLight | light widget rendered (gray "Unknown" before topic selection); UInt8 feed verified headless | rendered |
 | StringLabel | widget renders; subscribes only after GUI topic selection (empty pre-selection state is by design) | rendered (idle) |
-| ImageView2Plugin | widget renders; image/topic selection is a GUI action. The image_view2 node is now ported (2D/3D markers, interaction, grid), so the marked-image round trip works once a topic is selected | rendered (idle) |
+| ImageView2Plugin | with the ported image_view2 node running, selecting the image topic (gear -> dialog) renders the marked image; the full image_publisher -> image_view2 -> rqt marked-image round trip was verified on screen | rendered |
 | DRCEnvironmentViewer | sample_drc_mini_maxwell.py; blackout state face + countdown drawn live | rendered |
 
 Notes
